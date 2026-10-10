@@ -1,0 +1,13 @@
+# Folder logo: hanya gambar yang boleh disajikan, skrip tidak boleh dijalankan.
+<IfModule mod_php.c>
+  php_flag engine off
+</IfModule>
+<FilesMatch "\.(php|phtml|phar|php[0-9])$">
+  <IfModule mod_authz_core.c>
+    Require all denied
+  </IfModule>
+  <IfModule !mod_authz_core.c>
+    Deny from all
+  </IfModule>
+</FilesMatch>
+Options -ExecCGI -Indexes

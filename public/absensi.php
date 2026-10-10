@@ -1,0 +1,114 @@
+<?php
+require __DIR__ . '/../app/bootstrap.php';
+require_login();
+$title = 'Absensi';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    csrf_check();
+
+    if (($_POST['aksi'] ?? '') === 'hapus') {
+        $pdo->beginTransaction();
+        $s = $pdo->prepare('SELECT lembur_id FROM absensi WHERE id=?');
+        $s->execute([(int)$_POST['id']]);
+        $lid = $s->fetchColumn();
+        $pdo->prepare('DELETE FROM absensi WHERE id=?')->execute([(int)$_POST['id']]);
+        if ($lid) $pdo->prepare('DELETE FROM lembur WHERE id=?')->execute([$lid]);
+        $pdo->commit();
+        flash('Absensi (dan lembur terkait) dihapus.');
+        redirect('absensi.php');
+    }
+
+    $kid     = (int)$_POST['karyawan_id'];
+    $tanggal = $_POST['tanggal'];
+    $masuk   = $_POST['jam_masuk'];
+    $keluar  = $_POST['jam_keluar'];
+    $merah   = isset($_POST['tanggal_merah']);
+
+    $s = $pdo->prepare('SELECT gaji_pokok FROM karyawan WHERE id=? AND aktif=1');
+    $s->execute([$kid]);
+    $k = $s->fetch();
+    if (!$k) { flash('Karyawan tidak valid.', 'danger'); redirect('absensi.php'); }
+
+    $cek = $pdo->prepare('SELECT 1 FROM absensi WHERE karyawan_id=? AND tanggal=?');
+    $cek->execute([$kid, $tanggal]);
+    if ($cek->fetch()) {
+        flash('Absensi karyawan ini di tanggal tersebut sudah ada. Hapus dulu jika ingin input ulang.', 'danger');
+        redirect('absensi.php');
+    }
+
+    [$jam, $tipe] = hitung_jam_lembur($tanggal, $masuk, $keluar, $merah);
+
+    $pdo->beginTransaction();
+    $lembur_id = null;
+    $total = 0;
+    if ($jam > 0) {
+        [$upah_jam, $total] = hitung_lembur((float)$k['gaji_pokok'], $jam, $tipe);
+        $pdo->prepare('INSERT INTO lembur (karyawan_id,tanggal,jam,tipe,upah_per_jam,total,keterangan) VALUES (?,?,?,?,?,?,?)')
+            ->execute([$kid, $tanggal, $jam, $tipe, $upah_jam, $total, "Otomatis dari absensi $masuk-$keluar"]);
+        $lembur_id = (int)$pdo->lastInsertId();
+    }
+    $pdo->prepare('INSERT INTO absensi (karyawan_id,tanggal,jam_masuk,jam_keluar,tanggal_merah,lembur_id) VALUES (?,?,?,?,?,?)')
+        ->execute([$kid, $tanggal, $masuk, $keluar, $merah ? 1 : 0, $lembur_id]);
+    $pdo->commit();
+
+    flash($jam > 0 ? "Absensi tersimpan. Lembur $jam jam = " . rupiah($total) : 'Absensi tersimpan. Tidak ada lembur.');
+    redirect('absensi.php');
+}
+
+$periode = $_GET['periode'] ?? date('Y-m');
+$karyawan = $pdo->query('SELECT id, nama FROM karyawan WHERE aktif=1 ORDER BY nama')->fetchAll();
+$s = $pdo->prepare("SELECT a.*, k.nama, l.jam AS jam_lembur, l.total
+                    FROM absensi a JOIN karyawan k ON k.id=a.karyawan_id
+                    LEFT JOIN lembur l ON l.id=a.lembur_id
+                    WHERE DATE_FORMAT(a.tanggal,'%Y-%m')=? ORDER BY a.tanggal DESC, k.nama");
+$s->execute([$periode]);
+$rows = $s->fetchAll();
+require APP_PATH . '/views/header.php';
+?>
+<div class="row g-4">
+  <div class="col-lg-4">
+    <div class="card"><div class="card-header">Input Absensi</div><div class="card-body">
+      <div class="alert alert-info py-2 small">
+        Jam kerja: <b><?= JAM_MASUK ?> - <?= JAM_PULANG ?></b>.<br>
+        Pulang lewat <?= JAM_PULANG ?> otomatis dihitung lembur (minimal <?= MIN_LEMBUR_MENIT ?> menit, dibulatkan ke bawah per <?= PEMBULATAN_MENIT ?> menit).
+      </div>
+      <form method="post"><?= csrf_field() ?>
+        <div class="mb-2"><label class="form-label">Karyawan</label>
+          <select name="karyawan_id" class="form-select" required>
+            <?php foreach ($karyawan as $k): ?><option value="<?= (int)$k['id'] ?>"><?= e($k['nama']) ?></option><?php endforeach; ?>
+          </select></div>
+        <div class="mb-2"><label class="form-label">Tanggal</label><input type="date" name="tanggal" class="form-control" required value="<?= date('Y-m-d') ?>"></div>
+        <div class="row g-2 mb-2">
+          <div class="col"><label class="form-label">Jam Masuk</label><input type="time" name="jam_masuk" class="form-control" required value="<?= JAM_MASUK ?>"></div>
+          <div class="col"><label class="form-label">Jam Keluar</label><input type="time" name="jam_keluar" class="form-control" required value="<?= JAM_PULANG ?>"></div>
+        </div>
+        <div class="form-check mb-3"><input class="form-check-input" type="checkbox" name="tanggal_merah" id="merah">
+          <label class="form-check-label" for="merah">Tanggal merah / hari libur nasional</label></div>
+        <button class="btn btn-primary">Simpan</button>
+      </form>
+    </div></div>
+  </div>
+  <div class="col-lg-8">
+    <form class="row g-2 mb-3" method="get">
+      <div class="col-auto"><input type="month" name="periode" class="form-control" value="<?= e($periode) ?>"></div>
+      <div class="col-auto"><button class="btn btn-outline-primary">Tampilkan</button></div>
+    </form>
+    <div class="card"><div class="table-responsive">
+      <table class="table table-hover mb-0 align-middle">
+        <thead><tr><th>Tanggal</th><th>Karyawan</th><th>Masuk</th><th>Keluar</th><th>Lembur</th><th class="text-end">Upah Lembur</th><th></th></tr></thead>
+        <tbody>
+        <?php foreach ($rows as $r): ?>
+          <tr><td><?= e($r['tanggal']) ?></td><td><?= e($r['nama']) ?></td>
+            <td><?= e(substr($r['jam_masuk'], 0, 5)) ?></td><td><?= e(substr($r['jam_keluar'], 0, 5)) ?></td>
+            <td><?= $r['jam_lembur'] ? e($r['jam_lembur']) . ' jam' : '-' ?></td>
+            <td class="text-end"><?= $r['total'] ? rupiah($r['total']) : '-' ?></td>
+            <td class="text-end"><form method="post" onsubmit="return confirm('Hapus absensi ini beserta lemburnya?')"><?= csrf_field() ?>
+              <input type="hidden" name="aksi" value="hapus"><input type="hidden" name="id" value="<?= (int)$r['id'] ?>">
+              <button class="btn btn-sm btn-outline-danger">Hapus</button></form></td></tr>
+        <?php endforeach; if (!$rows): ?><tr><td colspan="7" class="text-center text-muted py-3">Belum ada absensi.</td></tr><?php endif; ?>
+        </tbody>
+      </table>
+    </div></div>
+  </div>
+</div>
+<?php require APP_PATH . '/views/footer.php'; ?>
