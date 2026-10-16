@@ -166,7 +166,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             // 2) bentuk absensi + lembur dari scan pertama & terakhir tiap hari
             $q = $pdo->prepare('SELECT MIN(waktu), MAX(waktu) FROM log_scan WHERE pin=? AND waktu BETWEEN ? AND ?');
-            $cekGaji = $pdo->prepare('SELECT 1 FROM gaji WHERE karyawan_id=? AND periode IN (?, ?)');
             $cekAbs = $pdo->prepare('SELECT id, lembur_id FROM absensi WHERE karyawan_id=? AND tanggal=?');
 
             foreach ($touch as $pin => $tgls) {
@@ -180,8 +179,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $hasil['tunggal'][] = $k['nama'] . ' (' . $tgl . ')';
                         continue;
                     }
-                    $cekGaji->execute([$k['id'], ...periode_kandidat($tgl)]);
-                    if ($cekGaji->fetch()) { $hasil['terkunci']++; continue; }   // gaji periode itu sudah diproses
+                    if (gaji_terkunci((int)$k['id'], $tgl)) { $hasil['terkunci']++; continue; }   // gaji periode itu sudah diproses
 
                     $cekAbs->execute([$k['id'], $tgl]);
                     if ($ada = $cekAbs->fetch()) {

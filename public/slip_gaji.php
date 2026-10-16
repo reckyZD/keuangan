@@ -2,7 +2,7 @@
 /**
  * Cetak slip gaji, ukuran 1/3 A4 (210 x 99 mm).
  *   slip_gaji.php?id=12            -> satu pegawai
- *   slip_gaji.php?periode=2026-10  (atau 2026-10-1 / 2026-10-2 untuk gaji 2x sebulan) -> semua pegawai periode itu, 3 slip per lembar A4
+ *   slip_gaji.php?periode=2026-10  -> semua pegawai periode itu, 3 slip per lembar A4
  */
 require __DIR__ . '/../app/bootstrap.php';
 require_login();
@@ -27,8 +27,12 @@ if (!$rows) {
 }
 
 // Total jam lembur per pegawai pada periodenya
-$q = $pdo->prepare("SELECT COALESCE(SUM(jam),0) FROM lembur WHERE karyawan_id=? AND tanggal BETWEEN ? AND ?");
-foreach ($rows as &$r) { $q->execute([$r['karyawan_id'], ...periode_range($r['periode'])]); $r['jam_lembur'] = (float)$q->fetchColumn(); }
+$q = $pdo->prepare('SELECT COALESCE(SUM(jam),0) FROM lembur WHERE karyawan_id=? AND tanggal BETWEEN ? AND ?');
+foreach ($rows as &$r) {
+    $rg = periode_range($r['periode']) ?? ['1000-01-01', '1000-01-01'];
+    $q->execute([$r['karyawan_id'], $rg[0], $rg[1]]);
+    $r['jam_lembur'] = (float)$q->fetchColumn();
+}
 unset($r);
 
 $co      = company();

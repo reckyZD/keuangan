@@ -17,10 +17,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     foreach (['nama' => 120, 'alamat' => 255, 'telp' => 40, 'email' => 100, 'kota' => 60, 'ttd_nama' => 100, 'ttd_jabatan' => 60] as $k => $maks) {
         $in[$k] = mb_substr(trim((string)($_POST[$k] ?? '')), 0, $maks);
     }
-    $in['gaji_siklus'] = ($_POST['gaji_siklus'] ?? '') === 'dua_mingguan' ? 'dua_mingguan' : 'bulanan';
     if ($in['nama'] === '') {
         flash('Nama perusahaan wajib diisi.', 'danger');
         redirect('pengaturan.php');
+    }
+
+    // ----- Periode gajian -----
+    $mode = in_array($_POST['gajian_mode'] ?? '', ['bulanan', 'semi_bulanan', 'dua_mingguan'], true) ? $_POST['gajian_mode'] : 'bulanan';
+    $tgl_ok = function (string $d): bool {
+        return (bool)preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $d, $m) && checkdate((int)$m[2], (int)$m[3], (int)$m[1]);
+    };
+    $awal  = trim((string)($_POST['gajian_awal'] ?? ''));
+    $akhir = trim((string)($_POST['gajian_akhir'] ?? ''));
+    $rentang_ok = $tgl_ok($awal) && $tgl_ok($akhir) && $akhir >= $awal && (strtotime($akhir) - strtotime($awal)) <= 20 * 86400;
+    if ($mode === 'dua_mingguan' && !$rentang_ok) {
+        flash('Gajian tiap 2 minggu: isi periode pertama (dari - sampai), mis. 19 Sep 2026 sampai 3 Okt 2026.', 'danger');
+        redirect('pengaturan.php');
+    }
+    $in['gajian_mode']  = $mode;
+    $in['gajian_awal']  = $rentang_ok ? $awal : '';
+    $in['gajian_akhir'] = $rentang_ok ? $akhir : '';
+    $in['gaji_pokok_cara'] = in_array($_POST['gaji_pokok_cara'] ?? '', ['penuh', 'sekali_sebulan', 'dibagi'], true) ? $_POST['gaji_pokok_cara'] : 'penuh';
+    if ($mode !== 'bulanan') {
+        // kunci periode 2x sebulan / 2 mingguan lebih panjang dari "YYYY-MM"
+        try { $pdo->exec('ALTER TABLE gaji MODIFY periode VARCHAR(12) NOT NULL'); } catch (Throwable $t) {}
     }
 
     // ----- Logo -----
@@ -87,6 +107,40 @@ require APP_PATH . '/views/header.php';
       </div>
     </div>
 
+    <div class="card mb-4">
+      <div class="card-header">Periode gajian</div>
+      <div class="card-body">
+        <div class="mb-3">
+          <label class="form-label" for="gajian_mode">Gajian dilakukan</label>
+          <select class="form-select" id="gajian_mode" name="gajian_mode">
+            <option value="bulanan"      <?= $co['gajian_mode'] === 'bulanan' ? 'selected' : '' ?>>Sebulan sekali</option>
+            <option value="semi_bulanan" <?= $co['gajian_mode'] === 'semi_bulanan' ? 'selected' : '' ?>>2 kali sebulan (tanggal 1-15 dan 16-akhir bulan)</option>
+            <option value="dua_mingguan" <?= $co['gajian_mode'] === 'dua_mingguan' ? 'selected' : '' ?>>Tiap 2 minggu (14 hari)</option>
+          </select>
+        </div>
+        <div class="row g-3 mb-3">
+          <div class="col-md-6">
+            <label class="form-label" for="gajian_awal">Periode pertama: dari</label>
+            <input class="form-control" type="date" id="gajian_awal" name="gajian_awal" value="<?= e($co['gajian_awal']) ?>">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label" for="gajian_akhir">sampai (hari gajian)</label>
+            <input class="form-control" type="date" id="gajian_akhir" name="gajian_akhir" value="<?= e($co['gajian_akhir']) ?>">
+          </div>
+          <div class="col-12"><p class="hint mb-0">Khusus tiap 2 minggu. Periode berikutnya otomatis tiap 14 hari dan selalu berakhir di hari yang sama dengan tanggal "sampai" (mis. 19 Sep - 3 Okt, lalu 4 - 17 Okt, 18 - 31 Okt, dst.).</p></div>
+        </div>
+        <div>
+          <label class="form-label" for="gaji_pokok_cara">Pembayaran gaji pokok</label>
+          <select class="form-select" id="gaji_pokok_cara" name="gaji_pokok_cara">
+            <option value="penuh"          <?= $co['gaji_pokok_cara'] === 'penuh' ? 'selected' : '' ?>>Dibayar utuh setiap gajian (tidak dibagi)</option>
+            <option value="sekali_sebulan" <?= $co['gaji_pokok_cara'] === 'sekali_sebulan' ? 'selected' : '' ?>>Dibayar utuh sekali sebulan (di gajian pertama bulan itu)</option>
+            <option value="dibagi"         <?= $co['gaji_pokok_cara'] === 'dibagi' ? 'selected' : '' ?>>Dibagi rata per gajian (nominal di data Karyawan = gaji sebulan)</option>
+          </select>
+        </div>
+        <p class="hint mt-3 mb-0">Mengganti pengaturan ini tidak mengubah gaji dan slip yang sudah diproses. Cicilan kasbon dipotong sebesar nilai cicilan pada setiap gajian.</p>
+      </div>
+    </div>
+
     <div class="card">
       <div class="card-header">Penandatangan slip gaji</div>
       <div class="card-body">
@@ -127,23 +181,6 @@ require APP_PATH . '/views/header.php';
         <?php if (company_logo_url()): ?>
           <div class="form-check"><input class="form-check-input" type="checkbox" name="hapus_logo" id="hapus_logo" value="1"><label class="form-check-label" for="hapus_logo">Hapus logo (pakai lambang bawaan)</label></div>
         <?php endif; ?>
-      </div>
-    </div>
-
-    <div class="card mb-4">
-      <div class="card-header">Siklus gaji</div>
-      <div class="card-body">
-        <div class="form-check mb-2">
-          <input class="form-check-input" type="radio" name="gaji_siklus" id="sk_bulanan" value="bulanan" <?= $co['gaji_siklus'] !== 'dua_mingguan' ? 'checked' : '' ?>>
-          <label class="form-check-label" for="sk_bulanan">Sebulan sekali</label>
-        </div>
-        <div class="form-check">
-          <input class="form-check-input" type="radio" name="gaji_siklus" id="sk_dua" value="dua_mingguan" <?= $co['gaji_siklus'] === 'dua_mingguan' ? 'checked' : '' ?>>
-          <label class="form-check-label" for="sk_dua">2x sebulan (per 2 minggu)</label>
-        </div>
-        <p class="hint mt-3 mb-0">Mode 2x sebulan: tahap 1 = tgl 1-<?= TAHAP_BATAS_TGL ?>, tahap 2 = tgl <?= TAHAP_BATAS_TGL + 1 ?>-akhir bulan.
-          Gaji pokok dan cicilan kasbon (yang diisi per bulan) dibagi dua per tahap; lembur dihitung sesuai tanggal tahapnya.
-          Satu bulan tidak bisa mencampur dua siklus.</p>
       </div>
     </div>
 

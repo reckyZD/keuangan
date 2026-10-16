@@ -11,7 +11,7 @@ keuangan/
 │   └── views/           -> head.php, header.php (sidebar), footer.php, kas_form.php
 ├── database/
 │   ├── schema.sql       -> instalasi baru (sudah lengkap)
-│   └── migrations/      -> hanya untuk database lama (001 - 005)
+│   └── migrations/      -> hanya untuk database lama (001 - 006)
 └── public/              -> halaman aplikasi (samples/ = contoh file fingerprint)
     ├── login.php, logout.php, setup.php
     ├── index.php (dashboard)
@@ -31,8 +31,21 @@ keuangan/
 
 ## Upgrade dari versi lama
 Jalankan file di `database/migrations/` yang belum pernah dijalankan, berurutan:
-001_absensi.sql, 002_fingerprint.sql, 003_kas_tanpa_gaji.sql, 004_pengaturan.sql, 005_kasbon_tidak_masuk_kas.sql, 006_siklus_gaji.sql
+001_absensi.sql, 002_fingerprint.sql, 003_kas_tanpa_gaji.sql, 004_pengaturan.sql, 005_kasbon_tidak_masuk_kas.sql, 006_periode_gajian.sql
 (004 juga dibuat otomatis saat halaman Pengaturan dibuka pertama kali.)
+
+## Periode gajian
+Atur di **Pengaturan > Periode gajian**: sebulan sekali, 2 kali sebulan (tgl 1-15 dan 16-akhir),
+atau tiap 2 minggu. Untuk tiap 2 minggu isi periode pertama (bawaan 19 Sep - 3 Okt 2026); periode
+berikutnya otomatis tiap 14 hari dan berakhir di hari yang sama (Sabtu): 4-17 Okt, 18-31 Okt, dst.
+Lembur dijumlahkan per rentang tanggal periode, cicilan kasbon dipotong tiap gajian, dan slip
+menampilkan rentang tanggalnya.
+
+**Gaji pokok** (Pengaturan > Pembayaran gaji pokok): dibayar utuh setiap gajian (bawaan, tidak dibagi),
+utuh sekali sebulan, atau dibagi rata per gajian.
+
+**Reset** (Gaji & slip > Reset periode ini): menghapus slip periode itu dan mengembalikan sisa kasbon
+yang tadi dipotong, supaya gaji bisa diproses ulang.
 
 ## Tampilan & fitur baru
 - Login, dashboard, dan semua halaman memakai sidebar (otomatis jadi menu geser di HP).
@@ -43,12 +56,6 @@ Jalankan file di `database/migrations/` yang belum pernah dijalankan, berurutan:
 - **Slip gaji** (menu Gaji & slip): "Cetak slip" per pegawai atau "Cetak semua slip".
   Ukuran 1/3 A4 (210 x 99 mm); cetak semua = 3 slip per lembar A4.
   Di dialog cetak browser pilih: kertas A4, skala 100% (Default), margin None/Tidak ada.
-
-## Siklus gaji & reset (uji coba)
-- **Pengaturan > Siklus gaji**: sebulan sekali, atau 2x sebulan (per 2 minggu: tahap 1 tgl 1-15, tahap 2 tgl 16-akhir).
-  Mode 2x sebulan membagi gaji pokok dan cicilan kasbon dua per tahap; lembur dihitung sesuai tanggal tahap.
-- **Gaji & slip > Uji coba: reset gaji**: "Reset periode ini" atau "Reset semua gaji" (ketik RESET). Sisa kasbon dikembalikan.
-  Tombol hanya tampil jika `MODE_TRIAL = true` di `app/config.php` (ubah ke false saat dipakai sungguhan).
 
 ## Aturan kas
 - Kasbon dicairkan = pengeluaran kas.

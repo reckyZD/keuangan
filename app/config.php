@@ -20,8 +20,3 @@ const MIN_SELANG_SCAN_MENIT = 60;  // import fingerprint: selang scan pertama & 
 // Gaji pokok dan upah lembur TIDAK masuk kas.
 // (Ubah ke true hanya jika suatu saat lembur ingin dicatat sebagai pengeluaran kas.)
 const LEMBUR_DARI_KAS = false;
-
-// ====== MODE UJI COBA ======
-// true  = tombol "Reset gaji" tampil di halaman Gaji & slip (untuk mencoba proses gaji berulang kali).
-// false = sembunyikan tombol reset. WAJIB diubah ke false saat aplikasi dipakai sungguhan.
-const MODE_TRIAL = true;

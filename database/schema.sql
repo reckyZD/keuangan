@@ -47,7 +47,7 @@ CREATE TABLE kasbon (
 CREATE TABLE gaji (
   id INT AUTO_INCREMENT PRIMARY KEY,
   karyawan_id INT NOT NULL,
-  periode VARCHAR(10) NOT NULL,        -- YYYY-MM (bulanan) atau YYYY-MM-1 / YYYY-MM-2 (2x sebulan)
+  periode VARCHAR(12) NOT NULL,         -- YYYY-MM | YYYY-MM-1/2 (2x sebulan) | YYYY-MM-DD (tiap 2 minggu)
   gaji_pokok DECIMAL(15,2) NOT NULL,
   total_lembur DECIMAL(15,2) NOT NULL DEFAULT 0,
   potongan_kasbon DECIMAL(15,2) NOT NULL DEFAULT 0,
@@ -55,15 +55,6 @@ CREATE TABLE gaji (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   UNIQUE KEY uq_karyawan_periode (karyawan_id, periode),
   FOREIGN KEY (karyawan_id) REFERENCES karyawan(id)
-) ENGINE=InnoDB;
-
-CREATE TABLE gaji_potongan (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  gaji_id INT NOT NULL,
-  kasbon_id INT NOT NULL,
-  jumlah DECIMAL(15,2) NOT NULL,
-  INDEX (gaji_id),
-  FOREIGN KEY (gaji_id) REFERENCES gaji(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 CREATE TABLE kas (
@@ -103,4 +94,13 @@ CREATE TABLE pengaturan (
 INSERT INTO pengaturan (kunci, nilai) VALUES
 ('nama', 'PT ADBIRA SELONGSONG PAPER'),
 ('alamat', ''), ('telp', ''), ('email', ''), ('kota', ''), ('logo', ''),
-('ttd_nama', ''), ('ttd_jabatan', 'Keuangan'), ('gaji_siklus', 'bulanan');
+('ttd_nama', ''), ('ttd_jabatan', 'Keuangan'),
+('gajian_mode', 'dua_mingguan'), ('gajian_awal', '2026-09-19'), ('gajian_akhir', '2026-10-03'), ('gaji_pokok_cara', 'penuh');
+
+CREATE TABLE gaji_potongan (          -- rincian potongan kasbon per slip (untuk tombol Reset)
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  gaji_id INT NOT NULL,
+  kasbon_id INT NOT NULL,
+  jumlah DECIMAL(15,2) NOT NULL,
+  INDEX idx_gaji (gaji_id)
+) ENGINE=InnoDB;

@@ -17,6 +17,25 @@
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') setSidebar(false); });
   if (sb) sb.querySelectorAll('a.sb-link, a.btn-kas').forEach(function (a) { a.addEventListener('click', function () { setSidebar(false); }); });
 
+  /* ---- Kolom nominal rupiah: titik ribuan langsung saat mengetik ----
+     Markup: <div class="amount"><span>Rp</span><input data-rupiah ...><input type="hidden" name="..."></div>
+     Nilai bersih (angka saja) dikirim lewat input hidden. */
+  function formatRupiah(v) { return v.replace(/\B(?=(\d{3})+(?!\d))/g, '.'); }
+  document.querySelectorAll('[data-rupiah]').forEach(function (inp) {
+    var box = inp.closest('.amount'), hid = box && box.querySelector('input[type=hidden]');
+    if (!hid) return;
+    function sync() {
+      var d = inp.value.replace(/\D/g, '').replace(/^0+(?=\d)/, '');
+      hid.value = d;
+      inp.value = formatRupiah(d);
+    }
+    inp.addEventListener('input', sync);
+    sync();                                            // nilai awal (mis. setelah gagal simpan)
+    if (inp.form) inp.form.addEventListener('submit', function (e) {
+      if (!hid.value || +hid.value < 1) { e.preventDefault(); inp.focus(); }
+    });
+  });
+
   /* ---- Form kas cepat ---- */
   document.querySelectorAll('[data-kas-form]').forEach(function (f) {
     var kat = {};
@@ -24,8 +43,7 @@
     var chips = f.querySelector('[data-chips]'),
         kInput = f.querySelector('input[name=kategori]'),
         btn = f.querySelector('[data-submit-label]'),
-        amt = f.querySelector('[data-rupiah]'),
-        hid = f.querySelector('input[name=jumlah]');
+        amt = f.querySelector('[data-rupiah]');
 
     function tipe() { return f.querySelector('input[name=tipe]:checked').value; }
     function mark() {
@@ -51,14 +69,6 @@
     f.querySelectorAll('input[name=tipe]').forEach(function (r) { r.addEventListener('change', function () { render(true); }); });
     kInput.addEventListener('input', mark);
 
-    amt.addEventListener('input', function () {
-      var d = amt.value.replace(/\D/g, '').replace(/^0+(?=\d)/, '');
-      hid.value = d;
-      amt.value = d.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-    });
-    f.addEventListener('submit', function (e) {
-      if (!hid.value || +hid.value < 1) { e.preventDefault(); amt.focus(); }
-    });
     render(false);
   });
 

@@ -34,13 +34,15 @@ require APP_PATH . '/views/header.php';
     <div class="card"><div class="card-header">Input Kasbon</div><div class="card-body">
       <form method="post">
         <?= csrf_field() ?>
-        <div class="mb-2"><label class="form-label">Karyawan</label>
+        <div class="mb-3"><label class="form-label">Karyawan</label>
           <select name="karyawan_id" class="form-select" required>
             <?php foreach ($karyawan as $k): ?><option value="<?= (int)$k['id'] ?>"><?= e($k['nama']) ?></option><?php endforeach; ?>
           </select></div>
-        <div class="mb-2"><label class="form-label">Tanggal</label><input type="date" name="tanggal" class="form-control" required value="<?= date('Y-m-d') ?>"></div>
-        <div class="mb-2"><label class="form-label">Jumlah Kasbon</label><input type="number" name="jumlah" min="1" class="form-control" required></div>
-        <div class="mb-2"><label class="form-label">Cicilan per Bulan (potongan gaji)</label><input type="number" name="cicilan" min="1" class="form-control" required></div>
+        <div class="mb-3"><label class="form-label">Tanggal</label><input type="date" name="tanggal" class="form-control" required value="<?= date('Y-m-d') ?>"></div>
+        <div class="mb-3"><label class="form-label" for="kb-jumlah">Jumlah kasbon</label>
+          <div class="amount"><span>Rp</span><input type="text" id="kb-jumlah" inputmode="numeric" autocomplete="off" placeholder="0" required data-rupiah><input type="hidden" name="jumlah"></div></div>
+        <div class="mb-3"><label class="form-label" for="kb-cicilan">Cicilan per gajian (potongan gaji)</label>
+          <div class="amount"><span>Rp</span><input type="text" id="kb-cicilan" inputmode="numeric" autocomplete="off" placeholder="0" required data-rupiah><input type="hidden" name="cicilan"></div></div>
         <div class="mb-3"><label class="form-label">Keterangan</label><input name="keterangan" class="form-control"></div>
         <button class="btn btn-primary">Simpan</button>
       </form>

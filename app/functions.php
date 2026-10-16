@@ -98,15 +98,167 @@ const NAMA_BULAN = [1 => 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
                     'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
 const NAMA_HARI  = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
 
-/** 2026-10 -> "Oktober 2026"; 2026-10-1 -> "Oktober 2026 (tgl 1-15)"; 2026-10-2 -> "Oktober 2026 (tgl 16-31)" */
-function periode_label(string $p): string {
-    if (!preg_match('/^(\d{4})-(\d{2})(?:-([12]))?$/', $p, $m)) return $p;
-    $s = (NAMA_BULAN[(int)$m[2]] ?? $m[2]) . ' ' . $m[1];
-    if (!empty($m[3])) {
-        [$a, $b] = periode_range($p);
-        $s .= ' (tgl ' . (int)substr($a, 8) . '-' . (int)substr($b, 8) . ')';
+/* ---------------------------------------------------------------------
+ *  Periode gajian. Kunci periode (disimpan di gaji.periode) menjelaskan dirinya sendiri:
+ *    2026-10        sebulan penuh            (mode bulanan)
+ *    2026-10-1      tgl 1-15                 (mode 2x sebulan)
+ *    2026-10-2      tgl 16-akhir bulan       (mode 2x sebulan)
+ *    2026-10-05     14 hari sejak tgl itu    (mode tiap 2 minggu)
+ *  Karena itu data lama tetap terbaca walau mode gajian diganti.
+ * ------------------------------------------------------------------- */
+
+/** Rentang tanggal [mulai, akhir] (Y-m-d) dari kunci periode; null jika tidak valid. */
+function periode_range(string $k): ?array {
+    if (preg_match('/^(\d{4})-(\d{2})$/', $k, $m)) {
+        if (!checkdate((int)$m[2], 1, (int)$m[1])) return null;
+        return [$k . '-01', date('Y-m-t', strtotime($k . '-01'))];
     }
-    return $s;
+    if (preg_match('/^(\d{4})-(\d{2})-([12])$/', $k, $m)) {
+        if (!checkdate((int)$m[2], 1, (int)$m[1])) return null;
+        $ym = $m[1] . '-' . $m[2];
+        return $m[3] === '1' ? [$ym . '-01', $ym . '-15'] : [$ym . '-16', date('Y-m-t', strtotime($ym . '-01'))];
+    }
+    if (preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $k, $m) && checkdate((int)$m[2], (int)$m[3], (int)$m[1])) {
+        [$fs, $fe] = gajian_pertama();
+        return $k === $fs ? [$k, $fe] : [$k, date('Y-m-d', strtotime($k . ' +13 days'))];
+    }
+    return null;
+}
+
+/** Periode pertama untuk mode tiap 2 minggu: [dari, sampai]. Periode berikutnya tiap 14 hari, berakhir di hari yang sama. */
+function gajian_pertama(): array {
+    $co = company();
+    $ok = function (string $d): bool {
+        return (bool)preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $d, $m) && checkdate((int)$m[2], (int)$m[3], (int)$m[1]);
+    };
+    if ($ok($co['gajian_awal']) && $ok($co['gajian_akhir']) && $co['gajian_akhir'] >= $co['gajian_awal']) {
+        return [$co['gajian_awal'], $co['gajian_akhir']];
+    }
+    $fe = date('Y-m-d', strtotime('saturday this week'));
+    return [date('Y-m-d', strtotime($fe . ' -13 days')), $fe];
+}
+
+/** Kolom gaji.periode semula CHAR(7); perlu VARCHAR(12) untuk kunci 2x sebulan / 2 mingguan. Aman dipanggil berulang. */
+function pastikan_kolom_periode(): void {
+    global $pdo;
+    if (company()['gajian_mode'] === 'bulanan') return;
+    try { $pdo->exec('ALTER TABLE gaji MODIFY periode VARCHAR(12) NOT NULL'); } catch (Throwable $t) {}
+}
+
+function periode_valid(string $k): bool { return periode_range($k) !== null; }
+
+/** "Oktober 2026", "1-15 Oktober 2026", "28 Sep - 11 Okt 2026" (sesuai bentuk kunci). */
+function periode_label(string $k): string {
+    $r = periode_range($k);
+    if (!$r) return $k;
+    if (preg_match('/^\d{4}-\d{2}$/', $k)) return NAMA_BULAN[(int)substr($k, 5, 2)] . ' ' . substr($k, 0, 4);
+    $ta = strtotime($r[0]); $tb = strtotime($r[1]);
+    if (date('Y-m', $ta) === date('Y-m', $tb)) {
+        return (int)date('j', $ta) . ' - ' . (int)date('j', $tb) . ' ' . NAMA_BULAN[(int)date('n', $tb)] . ' ' . date('Y', $tb);
+    }
+    $pendek = fn(int $t): string => (int)date('j', $t) . ' ' . substr(NAMA_BULAN[(int)date('n', $t)], 0, 3);
+    $thn = date('Y', $ta) === date('Y', $tb) ? '' : ' ' . date('Y', $ta);
+    return $pendek($ta) . $thn . ' - ' . $pendek($tb) . ' ' . date('Y', $tb);
+}
+
+/** Kunci periode yang memuat tanggal tertentu, menurut mode gajian di Pengaturan. */
+function periode_for_date(string $tgl): string {
+    $co = company();
+    $t  = strtotime($tgl);
+    if ($co['gajian_mode'] === 'semi_bulanan') {
+        return date('Y-m', $t) . ((int)date('j', $t) <= 15 ? '-1' : '-2');
+    }
+    if ($co['gajian_mode'] === 'dua_mingguan') {
+        [$fs, $fe] = gajian_pertama();
+        $d = date('Y-m-d', $t);
+        if ($d >= $fs && $d <= $fe) return $fs;                       // periode pertama (mis. 19 Sep - 3 Okt)
+        $awal  = strtotime($d > $fe ? $fe . ' +1 day' : $fs);         // setelahnya: blok 14 hari dari hari berikutnya
+        $hari  = (int)round(($t - $awal) / 86400);
+        $geser = (int)floor($hari / 14) * 14;
+        return date('Y-m-d', strtotime(date('Y-m-d', $awal) . ' ' . sprintf('%+d', $geser) . ' days'));
+    }
+    return date('Y-m', $t);
+}
+
+/** Periode sebelumnya dari kunci yang sama bentuknya. */
+function periode_prev(string $k): string {
+    if (preg_match('/^\d{4}-\d{2}$/', $k)) return date('Y-m', strtotime($k . '-01 -1 month'));
+    if (preg_match('/^(\d{4}-\d{2})-([12])$/', $k, $m)) {
+        return $m[2] === '2' ? $m[1] . '-1' : date('Y-m', strtotime($m[1] . '-01 -1 month')) . '-2';
+    }
+    [$fs, $fe] = gajian_pertama();
+    if ($k === date('Y-m-d', strtotime($fe . ' +1 day'))) return $fs;   // setelah periode pertama
+    return date('Y-m-d', strtotime($k . ' -14 days'));
+}
+
+/** Pilihan periode untuk dropdown: periode berjalan + sebelumnya + periode yang pernah digaji. */
+function periode_options(int $n = 12): array {
+    global $pdo;
+    $k = periode_for_date(date('Y-m-d'));
+    $set = [];
+    for ($i = 0; $i < $n; $i++) { $set[$k] = true; $k = periode_prev($k); }
+    try {
+        foreach ($pdo->query('SELECT DISTINCT periode FROM gaji')->fetchAll(PDO::FETCH_COLUMN) as $p) {
+            if (periode_range((string)$p)) $set[(string)$p] = true;
+        }
+    } catch (Throwable $t) {}
+    $keys = array_map('strval', array_keys($set));
+    usort($keys, function ($a, $b) {
+        $ra = periode_range($a); $rb = periode_range($b);
+        return strcmp($rb[0], $ra[0]) ?: strcmp($rb[1], $ra[1]);
+    });
+    return $keys;
+}
+
+/**
+ * Gaji pokok yang dibayar pada periode ini (pengaturan "gaji_pokok_cara"):
+ *  penuh          nominal di data Karyawan dibayar utuh pada setiap gajian (bawaan, tidak dibagi)
+ *  sekali_sebulan nominal dibayar utuh hanya pada gajian pertama tiap bulan (berdasarkan tanggal gajian = akhir periode)
+ *  dibagi         nominal bulanan dibagi rata per gajian (2x sebulan = 1/2, tiap 2 minggu = 12/26)
+ */
+function gaji_pokok_periode(float $gp, string $k): float {
+    $cara = company()['gaji_pokok_cara'];
+    if ($cara === 'sekali_sebulan') {
+        $r = periode_range($k); $p = periode_range(periode_prev($k));
+        if (!$r || !$p) return $gp;
+        return substr($p[1], 0, 7) === substr($r[1], 0, 7) ? 0.0 : $gp;   // gajian sebelumnya masih di bulan yang sama
+    }
+    if ($cara === 'dibagi') {
+        if (preg_match('/^\d{4}-\d{2}$/', $k)) return $gp;
+        if (preg_match('/^\d{4}-\d{2}-[12]$/', $k)) return round($gp / 2);
+        return round($gp * 12 / 26);
+    }
+    return $gp;
+}
+
+/** Tabel rincian potongan kasbon per slip, dipakai tombol Reset untuk mengembalikan sisa kasbon. Aman dipanggil berulang. */
+function pastikan_tabel_potongan(): void {
+    global $pdo;
+    try {
+        $pdo->exec('CREATE TABLE IF NOT EXISTS gaji_potongan (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            gaji_id INT NOT NULL,
+            kasbon_id INT NOT NULL,
+            jumlah DECIMAL(15,2) NOT NULL,
+            INDEX idx_gaji (gaji_id)
+        ) ENGINE=InnoDB');
+    } catch (Throwable $t) {}
+}
+
+/** Apakah tanggal ini sudah masuk periode yang gajinya diproses untuk karyawan tsb? */
+function gaji_terkunci(int $kid, string $tgl): bool {
+    global $pdo;
+    static $cache = [];
+    if (!isset($cache[$kid])) {
+        $s = $pdo->prepare('SELECT periode FROM gaji WHERE karyawan_id=?');
+        $s->execute([$kid]);
+        $cache[$kid] = $s->fetchAll(PDO::FETCH_COLUMN);
+    }
+    foreach ($cache[$kid] as $p) {
+        $r = periode_range((string)$p);
+        if ($r && $tgl >= $r[0] && $tgl <= $r[1]) return true;
+    }
+    return false;
 }
 
 /** 2026-10-10 -> "10 Oktober 2026" (hari = true -> "Sabtu, 10 Oktober 2026") */
@@ -144,7 +296,10 @@ function terbilang_rp($n): string {
 function company_defaults(): array {
     return ['nama' => 'PT ADBIRA SELONGSONG PAPER', 'alamat' => '', 'telp' => '', 'email' => '',
             'kota' => '', 'logo' => '', 'ttd_nama' => '', 'ttd_jabatan' => 'Keuangan',
-            'gaji_siklus' => 'bulanan'];
+            'gajian_mode'     => 'dua_mingguan',  // bulanan | semi_bulanan | dua_mingguan
+            'gajian_awal'     => '2026-09-19',    // periode pertama (khusus dua_mingguan): dari ...
+            'gajian_akhir'    => '2026-10-03',    // ... sampai (hari gajian, Sabtu). Berikutnya tiap 14 hari.
+            'gaji_pokok_cara' => 'penuh'];        // penuh | sekali_sebulan | dibagi
 }
 function company(): array {
     static $c = null;
@@ -220,83 +375,4 @@ function icon(string $n, int $s = 20): string {
     ];
     return '<svg class="ico" width="' . $s . '" height="' . $s . '" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
          . 'stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' . ($p[$n] ?? '') . '</svg>';
-}
-
-
-/* =====================================================================
- *  Siklus gaji: bulanan, atau 2x sebulan (per 2 minggu)
- *  Kode periode : "2026-10"   = gaji sebulan penuh
- *                 "2026-10-1" = tahap 1 (tgl 1-15)
- *                 "2026-10-2" = tahap 2 (tgl 16-akhir bulan)
- * ===================================================================== */
-
-const TAHAP_BATAS_TGL = 15;   // tahap 1 berakhir tanggal ini
-
-/** 'bulanan' (bawaan) atau 'dua_mingguan'. */
-function gaji_siklus(): string {
-    return (company()['gaji_siklus'] ?? '') === 'dua_mingguan' ? 'dua_mingguan' : 'bulanan';
-}
-function gaji_dua_tahap(): bool { return gaji_siklus() === 'dua_mingguan'; }
-
-function periode_valid(string $p): bool {
-    return (bool)preg_match('/^\d{4}-(0[1-9]|1[0-2])(-[12])?$/', $p);
-}
-
-/** [tanggal_mulai, tanggal_akhir] (Y-m-d) dari kode periode. */
-function periode_range(string $p): array {
-    $ym   = substr($p, 0, 7);
-    $akhir = date('Y-m-t', strtotime("$ym-01"));
-    if (strlen($p) === 9) {
-        return substr($p, 8, 1) === '1' ? ["$ym-01", sprintf('%s-%02d', $ym, TAHAP_BATAS_TGL)]
-                                         : [sprintf('%s-%02d', $ym, TAHAP_BATAS_TGL + 1), $akhir];
-    }
-    return ["$ym-01", $akhir];
-}
-
-/** Kode periode untuk sebuah tanggal menurut siklus yang aktif. */
-function periode_sekarang(?string $tanggal = null): string {
-    $t  = $tanggal ? strtotime($tanggal) : time();
-    $ym = date('Y-m', $t);
-    if (!gaji_dua_tahap()) return $ym;
-    return $ym . '-' . ((int)date('j', $t) <= TAHAP_BATAS_TGL ? 1 : 2);
-}
-
-/** Sesuaikan kode periode dengan siklus aktif (tambah/hapus akhiran tahap). */
-function periode_normal(string $p): string {
-    if (!periode_valid($p)) return periode_sekarang();
-    if (gaji_dua_tahap()) {
-        return strlen($p) === 9 ? $p : substr($p, 0, 7) . '-' . ((int)date('j') <= TAHAP_BATAS_TGL ? 1 : 2);
-    }
-    return substr($p, 0, 7);
-}
-
-/** Kode periode gaji yang mungkin menutup tanggal ini (bulanan maupun per tahap). */
-function periode_kandidat(string $tanggal): array {
-    $t = strtotime($tanggal);
-    $ym = date('Y-m', $t);
-    return [$ym, $ym . '-' . ((int)date('j', $t) <= TAHAP_BATAS_TGL ? 1 : 2)];
-}
-
-/** Bagian nilai bulanan untuk satu periode. Bulanan: utuh. Tahap 1 = setengah dibulatkan ke bawah, tahap 2 = sisanya. */
-function bagian_periode(float $bulanan, string $p): float {
-    if (strlen($p) !== 9) return $bulanan;
-    $t1 = floor($bulanan / 2);
-    return substr($p, 8, 1) === '1' ? $t1 : $bulanan - $t1;
-}
-
-/** Siapkan kolom periode (VARCHAR(10)) dan tabel rincian potongan kasbon pada database lama. */
-function migrasi_gaji(PDO $pdo): void {
-    try {
-        $len = $pdo->query("SELECT CHARACTER_MAXIMUM_LENGTH FROM INFORMATION_SCHEMA.COLUMNS
-                            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'gaji' AND COLUMN_NAME = 'periode'")->fetchColumn();
-        if ($len !== false && (int)$len < 10) $pdo->exec('ALTER TABLE gaji MODIFY periode VARCHAR(10) NOT NULL');
-        $pdo->exec("CREATE TABLE IF NOT EXISTS gaji_potongan (
-          id INT AUTO_INCREMENT PRIMARY KEY,
-          gaji_id INT NOT NULL,
-          kasbon_id INT NOT NULL,
-          jumlah DECIMAL(15,2) NOT NULL,
-          INDEX (gaji_id),
-          FOREIGN KEY (gaji_id) REFERENCES gaji(id) ON DELETE CASCADE
-        ) ENGINE=InnoDB");
-    } catch (Throwable $t) { error_log('migrasi_gaji: ' . $t->getMessage()); }
 }
