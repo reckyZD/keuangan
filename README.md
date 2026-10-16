@@ -11,7 +11,7 @@ keuangan/
 │   └── views/           -> head.php, header.php (sidebar), footer.php, kas_form.php
 ├── database/
 │   ├── schema.sql       -> instalasi baru (sudah lengkap)
-│   └── migrations/      -> hanya untuk database lama (001 - 004)
+│   └── migrations/      -> hanya untuk database lama (001 - 005)
 └── public/              -> halaman aplikasi (samples/ = contoh file fingerprint)
     ├── login.php, logout.php, setup.php
     ├── index.php (dashboard)
@@ -31,7 +31,7 @@ keuangan/
 
 ## Upgrade dari versi lama
 Jalankan file di `database/migrations/` yang belum pernah dijalankan, berurutan:
-001_absensi.sql, 002_fingerprint.sql, 003_kas_tanpa_gaji.sql, 004_pengaturan.sql
+001_absensi.sql, 002_fingerprint.sql, 003_kas_tanpa_gaji.sql, 004_pengaturan.sql, 005_kasbon_tidak_masuk_kas.sql, 006_siklus_gaji.sql
 (004 juga dibuat otomatis saat halaman Pengaturan dibuka pertama kali.)
 
 ## Tampilan & fitur baru
@@ -44,10 +44,18 @@ Jalankan file di `database/migrations/` yang belum pernah dijalankan, berurutan:
   Ukuran 1/3 A4 (210 x 99 mm); cetak semua = 3 slip per lembar A4.
   Di dialog cetak browser pilih: kertas A4, skala 100% (Default), margin None/Tidak ada.
 
+## Siklus gaji & reset (uji coba)
+- **Pengaturan > Siklus gaji**: sebulan sekali, atau 2x sebulan (per 2 minggu: tahap 1 tgl 1-15, tahap 2 tgl 16-akhir).
+  Mode 2x sebulan membagi gaji pokok dan cicilan kasbon dua per tahap; lembur dihitung sesuai tanggal tahap.
+- **Gaji & slip > Uji coba: reset gaji**: "Reset periode ini" atau "Reset semua gaji" (ketik RESET). Sisa kasbon dikembalikan.
+  Tombol hanya tampil jika `MODE_TRIAL = true` di `app/config.php` (ubah ke false saat dipakai sungguhan).
+
 ## Aturan kas
 - Kasbon dicairkan = pengeluaran kas.
-- Potongan kasbon saat gaji diproses = pemasukan kas (Pelunasan Kasbon).
+- Potongan kasbon saat gaji diproses TIDAK masuk kas (dibayar langsung owner lewat potong gaji).
 - Gaji pokok dan upah lembur tidak dicatat di kas.
+- Hari kerja Senin-Sabtu (Minggu & tanggal merah = lembur penuh). Upah lembur tetap Rp 7.000/jam;
+  ubah di `app/config.php` (`UPAH_LEMBUR_PER_JAM`, `HARI_LIBUR`).
 - (Opsional) `LEMBUR_DARI_KAS = true` di `app/config.php` jika lembur ingin dicatat sebagai pengeluaran kas.
 
 Data uji: jalankan database/sample_data.sql lalu import file di public/samples/.

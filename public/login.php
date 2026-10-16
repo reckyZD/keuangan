@@ -32,7 +32,7 @@ $co = company();
     </div>
     <div>
       <h2>Kas, absensi, dan gaji dalam satu tempat.</h2>
-      <p>Catat kas harian, hitung lembur dan lalu cetak slip gaji pegawai.</p>
+      <p>Catat kas harian, hitung lembur dari fingerprint, lalu cetak slip gaji pegawai.</p>
     </div>
   </section>
 

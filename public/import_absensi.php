@@ -166,7 +166,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             // 2) bentuk absensi + lembur dari scan pertama & terakhir tiap hari
             $q = $pdo->prepare('SELECT MIN(waktu), MAX(waktu) FROM log_scan WHERE pin=? AND waktu BETWEEN ? AND ?');
-            $cekGaji = $pdo->prepare('SELECT 1 FROM gaji WHERE karyawan_id=? AND periode=?');
+            $cekGaji = $pdo->prepare('SELECT 1 FROM gaji WHERE karyawan_id=? AND periode IN (?, ?)');
             $cekAbs = $pdo->prepare('SELECT id, lembur_id FROM absensi WHERE karyawan_id=? AND tanggal=?');
 
             foreach ($touch as $pin => $tgls) {
@@ -180,7 +180,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $hasil['tunggal'][] = $k['nama'] . ' (' . $tgl . ')';
                         continue;
                     }
-                    $cekGaji->execute([$k['id'], substr($tgl, 0, 7)]);
+                    $cekGaji->execute([$k['id'], ...periode_kandidat($tgl)]);
                     if ($cekGaji->fetch()) { $hasil['terkunci']++; continue; }   // gaji periode itu sudah diproses
 
                     $cekAbs->execute([$k['id'], $tgl]);
@@ -197,7 +197,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     $lembur_id = null;
                     if ($jam > 0) {
-                        [$upah_jam, $total] = hitung_lembur((float)$k['gaji_pokok'], $jam, $tipe);
+                        [$upah_jam, $total] = hitung_lembur($jam);
                         $pdo->prepare('INSERT INTO lembur (karyawan_id,tanggal,jam,tipe,upah_per_jam,total,keterangan) VALUES (?,?,?,?,?,?,?)')
                             ->execute([$k['id'], $tgl, $jam, $tipe, $upah_jam, $total, 'Otomatis dari fingerprint ' . substr($masuk, 0, 5) . '-' . substr($keluar, 0, 5)]);
                         $lembur_id = (int)$pdo->lastInsertId();

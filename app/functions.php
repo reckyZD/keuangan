@@ -31,37 +31,25 @@ function flash(?string $msg = null, string $type = 'success') {
 function redirect(string $url): void { header("Location: $url"); exit; }
 
 /**
- * Hitung upah lembur (acuan Kepmenakertrans 102/2004, 5 hari kerja).
- * Upah sejam = 1/173 x gaji bulanan.
- *  - Hari kerja : jam 1 = 1,5x ; jam berikutnya = 2x
- *  - Hari libur : jam 1-8 = 2x ; jam 9 = 3x ; jam 10-11 = 4x
- * Sesuaikan dengan kebijakan perusahaan Anda.
+ * Upah lembur = jam lembur x tarif tetap per jam (UPAH_LEMBUR_PER_JAM di app/config.php).
+ * Tarif sama untuk hari kerja maupun hari libur.
+ * Mengembalikan [upah_per_jam, total].
  */
-function hitung_lembur(float $gaji_pokok, float $jam, string $tipe): array {
-    $upah_jam = $gaji_pokok / 173;
-    $pengali = 0.0;
-    if ($tipe === 'libur') {
-        $sisa = $jam;
-        $a = min($sisa, 8); $pengali += $a * 2; $sisa -= $a;
-        $a = min($sisa, 1); $pengali += $a * 3; $sisa -= $a;
-        $a = min($sisa, 2); $pengali += $a * 4;
-    } else {
-        $pengali = min($jam, 1) * 1.5 + max($jam - 1, 0) * 2;
-    }
-    return [round($upah_jam), round($upah_jam * $pengali)];
+function hitung_lembur(float $jam): array {
+    return [(float)UPAH_LEMBUR_PER_JAM, round($jam * UPAH_LEMBUR_PER_JAM)];
 }
 
 /**
  * Hitung jam lembur dari jam masuk/keluar.
  * - Hari kerja : lembur = jam keluar - JAM_PULANG (jika >= MIN_LEMBUR_MENIT)
- * - Sabtu/Minggu/tanggal merah : seluruh durasi kerja (dikurangi istirahat) = lembur
+ * - Minggu/tanggal merah : seluruh durasi kerja (dikurangi istirahat) = lembur (Senin-Sabtu hari kerja)
  * Mengembalikan [jam_lembur, tipe].
  */
 function hitung_jam_lembur(string $tanggal, string $masuk, string $keluar, bool $tanggal_merah = false): array {
     $m = strtotime("$tanggal $masuk");
     $k = strtotime("$tanggal $keluar");
     if ($k <= $m) $k += 86400;                       // pulang melewati tengah malam
-    $libur = $tanggal_merah || in_array((int)date('N', strtotime($tanggal)), [6, 7], true);
+    $libur = $tanggal_merah || in_array((int)date('N', strtotime($tanggal)), HARI_LIBUR, true);
 
     if ($libur) {
         $menit = ($k - $m) / 60;
@@ -110,10 +98,15 @@ const NAMA_BULAN = [1 => 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
                     'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
 const NAMA_HARI  = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
 
-/** 2026-10 -> "Oktober 2026" */
-function periode_label(string $ym): string {
-    if (!preg_match('/^(\d{4})-(\d{2})$/', $ym, $m)) return $ym;
-    return (NAMA_BULAN[(int)$m[2]] ?? $m[2]) . ' ' . $m[1];
+/** 2026-10 -> "Oktober 2026"; 2026-10-1 -> "Oktober 2026 (tgl 1-15)"; 2026-10-2 -> "Oktober 2026 (tgl 16-31)" */
+function periode_label(string $p): string {
+    if (!preg_match('/^(\d{4})-(\d{2})(?:-([12]))?$/', $p, $m)) return $p;
+    $s = (NAMA_BULAN[(int)$m[2]] ?? $m[2]) . ' ' . $m[1];
+    if (!empty($m[3])) {
+        [$a, $b] = periode_range($p);
+        $s .= ' (tgl ' . (int)substr($a, 8) . '-' . (int)substr($b, 8) . ')';
+    }
+    return $s;
 }
 
 /** 2026-10-10 -> "10 Oktober 2026" (hari = true -> "Sabtu, 10 Oktober 2026") */
@@ -150,7 +143,8 @@ function terbilang_rp($n): string {
 /** Data perusahaan (tabel `pengaturan`); kembali ke nilai bawaan jika tabel belum ada. */
 function company_defaults(): array {
     return ['nama' => 'PT ADBIRA SELONGSONG PAPER', 'alamat' => '', 'telp' => '', 'email' => '',
-            'kota' => '', 'logo' => '', 'ttd_nama' => '', 'ttd_jabatan' => 'Keuangan'];
+            'kota' => '', 'logo' => '', 'ttd_nama' => '', 'ttd_jabatan' => 'Keuangan',
+            'gaji_siklus' => 'bulanan'];
 }
 function company(): array {
     static $c = null;
@@ -187,13 +181,14 @@ function brand_mark(string $class = ''): string {
 function kas_kategori(): array {
     global $pdo;
     $def = [
-        'masuk'  => ['Penjualan', 'Pelunasan Kasbon', 'Ambil Dari ATM' , 'Lain-lain'],
-        'keluar' => ['Operasional', 'Transport', 'Pembelian', 'Kasbon' , 'Ongkir'],
+        'masuk'  => ['Penjualan', 'Lain-lain'],
+        'keluar' => ['Operasional', 'Transport', 'Pembelian', 'Kasbon'],
     ];
     $out = ['masuk' => [], 'keluar' => []];
     try {
         $q = $pdo->query('SELECT tipe, kategori, COUNT(*) c FROM kas GROUP BY tipe, kategori ORDER BY c DESC, kategori');
         foreach ($q->fetchAll() as $r) {
+            if ($r['kategori'] === 'Pelunasan Kasbon') continue;   // sudah tidak dipakai
             if (isset($out[$r['tipe']]) && count($out[$r['tipe']]) < 6) $out[$r['tipe']][] = $r['kategori'];
         }
     } catch (Throwable $t) {}
@@ -225,4 +220,83 @@ function icon(string $n, int $s = 20): string {
     ];
     return '<svg class="ico" width="' . $s . '" height="' . $s . '" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
          . 'stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' . ($p[$n] ?? '') . '</svg>';
+}
+
+
+/* =====================================================================
+ *  Siklus gaji: bulanan, atau 2x sebulan (per 2 minggu)
+ *  Kode periode : "2026-10"   = gaji sebulan penuh
+ *                 "2026-10-1" = tahap 1 (tgl 1-15)
+ *                 "2026-10-2" = tahap 2 (tgl 16-akhir bulan)
+ * ===================================================================== */
+
+const TAHAP_BATAS_TGL = 15;   // tahap 1 berakhir tanggal ini
+
+/** 'bulanan' (bawaan) atau 'dua_mingguan'. */
+function gaji_siklus(): string {
+    return (company()['gaji_siklus'] ?? '') === 'dua_mingguan' ? 'dua_mingguan' : 'bulanan';
+}
+function gaji_dua_tahap(): bool { return gaji_siklus() === 'dua_mingguan'; }
+
+function periode_valid(string $p): bool {
+    return (bool)preg_match('/^\d{4}-(0[1-9]|1[0-2])(-[12])?$/', $p);
+}
+
+/** [tanggal_mulai, tanggal_akhir] (Y-m-d) dari kode periode. */
+function periode_range(string $p): array {
+    $ym   = substr($p, 0, 7);
+    $akhir = date('Y-m-t', strtotime("$ym-01"));
+    if (strlen($p) === 9) {
+        return substr($p, 8, 1) === '1' ? ["$ym-01", sprintf('%s-%02d', $ym, TAHAP_BATAS_TGL)]
+                                         : [sprintf('%s-%02d', $ym, TAHAP_BATAS_TGL + 1), $akhir];
+    }
+    return ["$ym-01", $akhir];
+}
+
+/** Kode periode untuk sebuah tanggal menurut siklus yang aktif. */
+function periode_sekarang(?string $tanggal = null): string {
+    $t  = $tanggal ? strtotime($tanggal) : time();
+    $ym = date('Y-m', $t);
+    if (!gaji_dua_tahap()) return $ym;
+    return $ym . '-' . ((int)date('j', $t) <= TAHAP_BATAS_TGL ? 1 : 2);
+}
+
+/** Sesuaikan kode periode dengan siklus aktif (tambah/hapus akhiran tahap). */
+function periode_normal(string $p): string {
+    if (!periode_valid($p)) return periode_sekarang();
+    if (gaji_dua_tahap()) {
+        return strlen($p) === 9 ? $p : substr($p, 0, 7) . '-' . ((int)date('j') <= TAHAP_BATAS_TGL ? 1 : 2);
+    }
+    return substr($p, 0, 7);
+}
+
+/** Kode periode gaji yang mungkin menutup tanggal ini (bulanan maupun per tahap). */
+function periode_kandidat(string $tanggal): array {
+    $t = strtotime($tanggal);
+    $ym = date('Y-m', $t);
+    return [$ym, $ym . '-' . ((int)date('j', $t) <= TAHAP_BATAS_TGL ? 1 : 2)];
+}
+
+/** Bagian nilai bulanan untuk satu periode. Bulanan: utuh. Tahap 1 = setengah dibulatkan ke bawah, tahap 2 = sisanya. */
+function bagian_periode(float $bulanan, string $p): float {
+    if (strlen($p) !== 9) return $bulanan;
+    $t1 = floor($bulanan / 2);
+    return substr($p, 8, 1) === '1' ? $t1 : $bulanan - $t1;
+}
+
+/** Siapkan kolom periode (VARCHAR(10)) dan tabel rincian potongan kasbon pada database lama. */
+function migrasi_gaji(PDO $pdo): void {
+    try {
+        $len = $pdo->query("SELECT CHARACTER_MAXIMUM_LENGTH FROM INFORMATION_SCHEMA.COLUMNS
+                            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'gaji' AND COLUMN_NAME = 'periode'")->fetchColumn();
+        if ($len !== false && (int)$len < 10) $pdo->exec('ALTER TABLE gaji MODIFY periode VARCHAR(10) NOT NULL');
+        $pdo->exec("CREATE TABLE IF NOT EXISTS gaji_potongan (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          gaji_id INT NOT NULL,
+          kasbon_id INT NOT NULL,
+          jumlah DECIMAL(15,2) NOT NULL,
+          INDEX (gaji_id),
+          FOREIGN KEY (gaji_id) REFERENCES gaji(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB");
+    } catch (Throwable $t) { error_log('migrasi_gaji: ' . $t->getMessage()); }
 }

@@ -100,9 +100,9 @@ require APP_PATH . '/views/header.php';
 </div>
 
 <div class="tiles">
-  <a class="tile kraft" href="gaji.php?periode=<?= e($bulan) ?>">
+  <a class="tile kraft" href="gaji.php?periode=<?= e(periode_sekarang()) ?>">
     <span class="tile-ico"><?= icon('printer', 22) ?></span>
-    <span><b>Slip gaji</b><span class="sub">Periode <?= e(periode_label($bulan)) ?></span></span>
+    <span><b>Slip gaji</b><span class="sub">Periode <?= e(periode_label(periode_sekarang())) ?></span></span>
   </a>
   <a class="tile" href="karyawan.php">
     <span class="tile-ico"><?= icon('users', 22) ?></span>

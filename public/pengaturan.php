@@ -17,6 +17,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     foreach (['nama' => 120, 'alamat' => 255, 'telp' => 40, 'email' => 100, 'kota' => 60, 'ttd_nama' => 100, 'ttd_jabatan' => 60] as $k => $maks) {
         $in[$k] = mb_substr(trim((string)($_POST[$k] ?? '')), 0, $maks);
     }
+    $in['gaji_siklus'] = ($_POST['gaji_siklus'] ?? '') === 'dua_mingguan' ? 'dua_mingguan' : 'bulanan';
     if ($in['nama'] === '') {
         flash('Nama perusahaan wajib diisi.', 'danger');
         redirect('pengaturan.php');
@@ -126,6 +127,23 @@ require APP_PATH . '/views/header.php';
         <?php if (company_logo_url()): ?>
           <div class="form-check"><input class="form-check-input" type="checkbox" name="hapus_logo" id="hapus_logo" value="1"><label class="form-check-label" for="hapus_logo">Hapus logo (pakai lambang bawaan)</label></div>
         <?php endif; ?>
+      </div>
+    </div>
+
+    <div class="card mb-4">
+      <div class="card-header">Siklus gaji</div>
+      <div class="card-body">
+        <div class="form-check mb-2">
+          <input class="form-check-input" type="radio" name="gaji_siklus" id="sk_bulanan" value="bulanan" <?= $co['gaji_siklus'] !== 'dua_mingguan' ? 'checked' : '' ?>>
+          <label class="form-check-label" for="sk_bulanan">Sebulan sekali</label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="radio" name="gaji_siklus" id="sk_dua" value="dua_mingguan" <?= $co['gaji_siklus'] === 'dua_mingguan' ? 'checked' : '' ?>>
+          <label class="form-check-label" for="sk_dua">2x sebulan (per 2 minggu)</label>
+        </div>
+        <p class="hint mt-3 mb-0">Mode 2x sebulan: tahap 1 = tgl 1-<?= TAHAP_BATAS_TGL ?>, tahap 2 = tgl <?= TAHAP_BATAS_TGL + 1 ?>-akhir bulan.
+          Gaji pokok dan cicilan kasbon (yang diisi per bulan) dibagi dua per tahap; lembur dihitung sesuai tanggal tahapnya.
+          Satu bulan tidak bisa mencampur dua siklus.</p>
       </div>
     </div>
 

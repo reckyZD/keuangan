@@ -15,7 +15,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $jam = (float)$_POST['jam'];
         $tipe = $_POST['tipe'] === 'libur' ? 'libur' : 'hari_kerja';
         if ($k && $jam > 0 && $jam <= 24) {
-            [$upah_jam, $total] = hitung_lembur((float)$k['gaji_pokok'], $jam, $tipe);
+            [$upah_jam, $total] = hitung_lembur($jam);
             $pdo->prepare('INSERT INTO lembur (karyawan_id,tanggal,jam,tipe,upah_per_jam,total,keterangan) VALUES (?,?,?,?,?,?,?)')
                 ->execute([(int)$_POST['karyawan_id'], $_POST['tanggal'], $jam, $tipe, $upah_jam, $total, trim($_POST['keterangan'])]);
             flash('Lembur dicatat: ' . rupiah($total));
@@ -45,9 +45,9 @@ require APP_PATH . '/views/header.php';
             <?php foreach ($karyawan as $k): ?><option value="<?= (int)$k['id'] ?>"><?= e($k['nama']) ?></option><?php endforeach; ?>
           </select></div>
         <div class="mb-2"><label class="form-label">Tanggal</label><input type="date" name="tanggal" class="form-control" required value="<?= date('Y-m-d') ?>"></div>
-        <div class="mb-2"><label class="form-label">Jam Lembur</label><input type="number" name="jam" step="0.5" min="0.5" max="24" class="form-control" required></div>
+        <div class="mb-2"><label class="form-label">Jam Lembur <span class="text-muted fw-normal">(Rp <?= number_format(UPAH_LEMBUR_PER_JAM, 0, ',', '.') ?>/jam)</span></label><input type="number" name="jam" step="0.5" min="0.5" max="24" class="form-control" required></div>
         <div class="mb-2"><label class="form-label">Jenis Hari</label>
-          <select name="tipe" class="form-select"><option value="hari_kerja">Hari kerja</option><option value="libur">Hari libur / akhir pekan</option></select></div>
+          <select name="tipe" class="form-select"><option value="hari_kerja">Hari kerja</option><option value="libur">Hari libur (Minggu / tanggal merah)</option></select></div>
         <div class="mb-3"><label class="form-label">Keterangan</label><input name="keterangan" class="form-control"></div>
         <button class="btn btn-primary">Simpan</button>
       </form>

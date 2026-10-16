@@ -2,7 +2,7 @@
 /**
  * Cetak slip gaji, ukuran 1/3 A4 (210 x 99 mm).
  *   slip_gaji.php?id=12            -> satu pegawai
- *   slip_gaji.php?periode=2026-10  -> semua pegawai periode itu, 3 slip per lembar A4
+ *   slip_gaji.php?periode=2026-10  (atau 2026-10-1 / 2026-10-2 untuk gaji 2x sebulan) -> semua pegawai periode itu, 3 slip per lembar A4
  */
 require __DIR__ . '/../app/bootstrap.php';
 require_login();
@@ -14,7 +14,7 @@ $sql = 'SELECT g.*, k.nama, k.nip, k.jabatan FROM gaji g JOIN karyawan k ON k.id
 if ($id > 0) {
     $s = $pdo->prepare("$sql WHERE g.id = ?");
     $s->execute([$id]);
-} elseif (preg_match('/^\d{4}-\d{2}$/', $periode)) {
+} elseif (periode_valid($periode)) {
     $s = $pdo->prepare("$sql WHERE g.periode = ? ORDER BY k.nama");
     $s->execute([$periode]);
 } else {
@@ -27,8 +27,8 @@ if (!$rows) {
 }
 
 // Total jam lembur per pegawai pada periodenya
-$q = $pdo->prepare("SELECT COALESCE(SUM(jam),0) FROM lembur WHERE karyawan_id=? AND DATE_FORMAT(tanggal,'%Y-%m')=?");
-foreach ($rows as &$r) { $q->execute([$r['karyawan_id'], $r['periode']]); $r['jam_lembur'] = (float)$q->fetchColumn(); }
+$q = $pdo->prepare("SELECT COALESCE(SUM(jam),0) FROM lembur WHERE karyawan_id=? AND tanggal BETWEEN ? AND ?");
+foreach ($rows as &$r) { $q->execute([$r['karyawan_id'], ...periode_range($r['periode'])]); $r['jam_lembur'] = (float)$q->fetchColumn(); }
 unset($r);
 
 $co      = company();

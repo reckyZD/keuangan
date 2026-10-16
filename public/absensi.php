@@ -42,7 +42,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $lembur_id = null;
     $total = 0;
     if ($jam > 0) {
-        [$upah_jam, $total] = hitung_lembur((float)$k['gaji_pokok'], $jam, $tipe);
+        [$upah_jam, $total] = hitung_lembur($jam);
         $pdo->prepare('INSERT INTO lembur (karyawan_id,tanggal,jam,tipe,upah_per_jam,total,keterangan) VALUES (?,?,?,?,?,?,?)')
             ->execute([$kid, $tanggal, $jam, $tipe, $upah_jam, $total, "Otomatis dari absensi $masuk-$keluar"]);
         $lembur_id = (int)$pdo->lastInsertId();
@@ -69,7 +69,7 @@ require APP_PATH . '/views/header.php';
   <div class="col-lg-4">
     <div class="card"><div class="card-header">Input Absensi</div><div class="card-body">
       <div class="alert alert-info py-2 small">
-        Jam kerja: <b><?= JAM_MASUK ?> - <?= JAM_PULANG ?></b>.<br>
+        Hari kerja <b>Senin-Sabtu</b>, jam <b><?= JAM_MASUK ?> - <?= JAM_PULANG ?></b>. Minggu &amp; tanggal merah = lembur penuh.<br>Upah lembur <b>Rp <?= number_format(UPAH_LEMBUR_PER_JAM, 0, ',', '.') ?>/jam</b>.<br>
         Pulang lewat <?= JAM_PULANG ?> otomatis dihitung lembur (minimal <?= MIN_LEMBUR_MENIT ?> menit, dibulatkan ke bawah per <?= PEMBULATAN_MENIT ?> menit).
       </div>
       <form method="post"><?= csrf_field() ?>
