@@ -102,7 +102,7 @@ require APP_PATH . '/views/header.php';
         <thead><tr><th>Tanggal</th><th>Karyawan</th><th>Masuk</th><th>Keluar</th><th>Lembur</th><th class="text-end">Upah Lembur</th><th></th></tr></thead>
         <tbody>
         <?php foreach ($rows as $r): ?>
-          <tr><td><?= e($r['tanggal']) ?></td><td><?= e($r['nama']) ?></td>
+          <tr><td><?= e(tgl($r['tanggal'])) ?></td><td><?= e($r['nama']) ?></td>
             <td><?= e(substr($r['jam_masuk'], 0, 5)) ?></td><td><?= e(substr($r['jam_keluar'], 0, 5)) ?></td>
             <td><?= $r['jam_lembur'] ? e($r['jam_lembur']) . ' jam' : '-' ?></td>
             <td class="text-end"><?= $r['total'] ? rupiah($r['total']) : '-' ?></td>

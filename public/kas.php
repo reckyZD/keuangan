@@ -43,6 +43,18 @@ require APP_PATH . '/views/header.php';
     </section>
   </div>
   <div class="col-lg-8">
+    <?php
+    $pb = preg_match('/^\d{4}-\d{2}$/', $periode) ? $periode : date('Y-m');
+    $ex_dari = $pb . '-01'; $ex_sampai = date('Y-m-t', strtotime($ex_dari));
+    ?>
+    <div class="card mb-3"><div class="card-body py-3">
+      <form class="row g-2 align-items-end" method="get" action="kas_export.php">
+        <div class="col-12 fw-semibold">Unduh rekap kas</div>
+        <div class="col-sm-auto"><label class="form-label" for="ex-dari">Dari tanggal</label><input type="date" id="ex-dari" name="dari" class="form-control" required value="<?= e($ex_dari) ?>"></div>
+        <div class="col-sm-auto"><label class="form-label" for="ex-sampai">Sampai tanggal</label><input type="date" id="ex-sampai" name="sampai" class="form-control" required value="<?= e($ex_sampai) ?>"></div>
+        <div class="col-sm-auto"><button class="btn btn-success"><?= icon('download', 18) ?> Unduh</button></div>
+      </form>
+    </div></div>
     <form class="row g-2 mb-3" method="get">
       <div class="col-auto"><input type="month" name="periode" class="form-control" value="<?= e($periode) ?>"></div>
       <div class="col-auto"><button class="btn btn-outline-primary">Tampilkan</button></div>

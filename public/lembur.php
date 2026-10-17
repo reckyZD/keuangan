@@ -68,7 +68,7 @@ require APP_PATH . '/views/header.php';
         <thead><tr><th>Tanggal</th><th>Karyawan</th><th>Jam</th><th>Jenis</th><th class="text-end">Total</th><th></th></tr></thead>
         <tbody>
         <?php foreach ($rows as $r): ?>
-          <tr><td><?= e($r['tanggal']) ?></td><td><?= e($r['nama']) ?></td><td><?= e($r['jam']) ?></td>
+          <tr><td><?= e(tgl($r['tanggal'])) ?></td><td><?= e($r['nama']) ?></td><td><?= e($r['jam']) ?></td>
             <td><?= $r['tipe'] === 'libur' ? 'Libur' : 'Hari kerja' ?></td>
             <td class="text-end"><?= rupiah($r['total']) ?></td>
             <td class="text-end"><form method="post" onsubmit="return confirm('Hapus?')"><?= csrf_field() ?>
