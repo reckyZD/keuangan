@@ -19,3 +19,4 @@ try {
 }
 
 require APP_PATH . '/functions.php';
+require APP_PATH . '/pagination.php';

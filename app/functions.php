@@ -376,3 +376,11 @@ function icon(string $n, int $s = 20): string {
     return '<svg class="ico" width="' . $s . '" height="' . $s . '" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
          . 'stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' . ($p[$n] ?? '') . '</svg>';
 }
+
+/** Ikon tab browser: logo perusahaan jika sudah diunggah, jika belum lambang cincin bawaan. */
+function favicon_tags(): string {
+    if ($u = company_logo_url()) {
+        return '<link rel="icon" href="' . e($u) . '">' . "\n  " . '<link rel="apple-touch-icon" href="' . e($u) . '">';
+    }
+    return '<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 32 32\'%3E%3Ccircle cx=\'16\' cy=\'16\' r=\'15\' fill=\'%231F2A44\'/%3E%3Ccircle cx=\'16\' cy=\'16\' r=\'9\' fill=\'none\' stroke=\'%23E2A93B\' stroke-width=\'2.6\'/%3E%3Ccircle cx=\'16\' cy=\'16\' r=\'3.4\' fill=\'%23E2A93B\'/%3E%3C/svg%3E">';
+}

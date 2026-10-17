@@ -28,11 +28,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $periode = $_GET['periode'] ?? date('Y-m');
 $karyawan = $pdo->query('SELECT id, nama FROM karyawan WHERE aktif=1 ORDER BY nama')->fetchAll();
+[$hal, $per] = pg_params();
+// jumlah data & total dihitung dari seluruh periode (bukan hanya halaman yang tampil)
+$c = $pdo->prepare("SELECT COUNT(*) AS n, COALESCE(SUM(total),0) AS grand FROM lembur WHERE DATE_FORMAT(tanggal,'%Y-%m') = ?");
+$c->execute([$periode]);
+$sum = $c->fetch();
+$total = (int)$sum['n']; $grand = (float)$sum['grand'];
 $s = $pdo->prepare("SELECT l.*, k.nama FROM lembur l JOIN karyawan k ON k.id=l.karyawan_id
-                    WHERE DATE_FORMAT(l.tanggal,'%Y-%m') = ? ORDER BY l.tanggal DESC, l.id DESC");
+                    WHERE DATE_FORMAT(l.tanggal,'%Y-%m') = ? ORDER BY l.tanggal DESC, l.id DESC" . pg_limit($total, $hal, $per));
 $s->execute([$periode]);
 $rows = $s->fetchAll();
-$grand = array_sum(array_column($rows, 'total'));
 require APP_PATH . '/views/header.php';
 ?>
 <div class="row g-4">
@@ -73,7 +78,8 @@ require APP_PATH . '/views/header.php';
         </tbody>
         <tfoot><tr class="table-light"><th colspan="4">Total periode</th><th class="text-end"><?= rupiah($grand) ?></th><th></th></tr></tfoot>
       </table>
-    </div></div>
+    </div>
+    <?= pg_footer($total, $hal, $per) ?></div>
   </div>
 </div>
 <?php require APP_PATH . '/views/footer.php'; ?>

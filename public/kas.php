@@ -21,11 +21,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $periode = $_GET['periode'] ?? date('Y-m');
-$s = $pdo->prepare("SELECT * FROM kas WHERE DATE_FORMAT(tanggal,'%Y-%m')=? ORDER BY tanggal DESC, id DESC");
+[$hal, $per] = pg_params();
+// total & saldo dihitung dari seluruh periode (bukan hanya halaman yang tampil)
+$t = $pdo->prepare("SELECT COUNT(*) AS n,
+                           COALESCE(SUM(CASE WHEN tipe='masuk'  THEN jumlah END),0) AS masuk,
+                           COALESCE(SUM(CASE WHEN tipe='keluar' THEN jumlah END),0) AS keluar
+                    FROM kas WHERE DATE_FORMAT(tanggal,'%Y-%m')=?");
+$t->execute([$periode]);
+$sum = $t->fetch();
+$total = (int)$sum['n']; $masuk = (float)$sum['masuk']; $keluar = (float)$sum['keluar'];
+$s = $pdo->prepare("SELECT * FROM kas WHERE DATE_FORMAT(tanggal,'%Y-%m')=? ORDER BY tanggal DESC, id DESC" . pg_limit($total, $hal, $per));
 $s->execute([$periode]);
 $rows = $s->fetchAll();
-$masuk = $keluar = 0;
-foreach ($rows as $r) { if ($r['tipe'] === 'masuk') $masuk += $r['jumlah']; else $keluar += $r['jumlah']; }
 require APP_PATH . '/views/header.php';
 ?>
 <div class="row g-4">
@@ -53,10 +60,11 @@ require APP_PATH . '/views/header.php';
               <button class="btn btn-sm btn-outline-danger">Hapus</button></form></td></tr>
         <?php endforeach; if (!$rows): ?><tr><td colspan="6" class="text-center text-muted py-3">Belum ada transaksi.</td></tr><?php endif; ?>
         </tbody>
-        <tfoot><tr class="table-light"><th colspan="3">Total (Saldo: <?= rupiah($masuk - $keluar) ?>)</th>
+        <tfoot><tr class="table-light"><th colspan="3">Total periode (Saldo: <?= rupiah($masuk - $keluar) ?>)</th>
           <th class="text-end"><?= rupiah($masuk) ?></th><th class="text-end"><?= rupiah($keluar) ?></th><th></th></tr></tfoot>
       </table>
-    </div></div>
+    </div>
+    <?= pg_footer($total, $hal, $per) ?></div>
   </div>
 </div>
 <?php require APP_PATH . '/views/footer.php'; ?>

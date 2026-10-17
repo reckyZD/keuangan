@@ -47,6 +47,7 @@ $jam_fmt = fn(float $j) => rtrim(rtrim(number_format($j, 1, ',', '.'), '0'), ','
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Slip gaji <?= e(count($rows) === 1 ? $rows[0]['nama'] . ' - ' . periode_label($rows[0]['periode']) : periode_label($rows[0]['periode'])) ?></title>
+  <?= favicon_tags() ?>
   <link rel="stylesheet" href="<?= asset('slip.css') ?>">
 </head>
 <body>

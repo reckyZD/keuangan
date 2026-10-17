@@ -26,7 +26,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $karyawan = $pdo->query('SELECT id, nama FROM karyawan WHERE aktif=1 ORDER BY nama')->fetchAll();
-$rows = $pdo->query('SELECT b.*, k.nama FROM kasbon b JOIN karyawan k ON k.id=b.karyawan_id ORDER BY b.status, b.tanggal DESC')->fetchAll();
+[$hal, $per] = pg_params();
+$total = (int)$pdo->query('SELECT COUNT(*) FROM kasbon')->fetchColumn();
+$rows = $pdo->query('SELECT b.*, k.nama FROM kasbon b JOIN karyawan k ON k.id=b.karyawan_id ORDER BY b.status, b.tanggal DESC, b.id DESC' . pg_limit($total, $hal, $per))->fetchAll();
 require APP_PATH . '/views/header.php';
 ?>
 <div class="row g-4">
@@ -61,7 +63,8 @@ require APP_PATH . '/views/header.php';
         <?php endforeach; if (!$rows): ?><tr><td colspan="6" class="text-center text-muted py-3">Belum ada kasbon.</td></tr><?php endif; ?>
         </tbody>
       </table>
-    </div></div>
+    </div>
+    <?= pg_footer($total, $hal, $per) ?></div>
   </div>
 </div>
 <?php require APP_PATH . '/views/footer.php'; ?>

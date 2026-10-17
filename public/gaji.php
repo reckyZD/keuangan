@@ -101,7 +101,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     redirect('gaji.php?periode=' . urlencode($periode));
 }
 
-$s = $pdo->prepare('SELECT g.*, k.nama, k.nip FROM gaji g JOIN karyawan k ON k.id=g.karyawan_id WHERE g.periode=? ORDER BY k.nama');
+[$hal, $per] = pg_params();
+// jumlah data & total dihitung dari seluruh slip periode (bukan hanya halaman yang tampil)
+$c = $pdo->prepare('SELECT COUNT(*) AS n, COALESCE(SUM(gaji_bersih),0) AS bersih FROM gaji WHERE periode=?');
+$c->execute([$periode]);
+$sum = $c->fetch();
+$total = (int)$sum['n']; $total_bersih = (float)$sum['bersih'];
+$s = $pdo->prepare('SELECT g.*, k.nama, k.nip FROM gaji g JOIN karyawan k ON k.id=g.karyawan_id WHERE g.periode=? ORDER BY k.nama, g.id' . pg_limit($total, $hal, $per));
 $s->execute([$periode]);
 $rows = $s->fetchAll();
 require APP_PATH . '/views/header.php';
@@ -119,7 +125,7 @@ require APP_PATH . '/views/header.php';
     <?= csrf_field() ?><input type="hidden" name="periode" value="<?= e($periode) ?>">
     <button class="btn btn-success">Proses gaji periode ini</button>
   </form>
-  <?php if ($rows): ?>
+  <?php if ($total): ?>
     <div class="ms-lg-auto d-flex flex-wrap gap-2">
       <a class="btn btn-outline-primary" href="slip_gaji.php?periode=<?= e($periode) ?>" target="_blank" rel="noopener"><?= icon('printer', 18) ?> Cetak semua slip</a>
       <form method="post" onsubmit="return confirm('Reset gaji periode <?= e(periode_label($periode)) ?>?\n\nSemua slip periode ini dihapus dan sisa kasbon dikembalikan. Setelah itu Anda bisa memproses ulang.')">
@@ -140,7 +146,8 @@ require APP_PATH . '/views/header.php';
         <td class="text-end"><a class="btn btn-sm btn-outline-primary" href="slip_gaji.php?id=<?= (int)$r['id'] ?>" target="_blank" rel="noopener">Cetak slip</a></td></tr>
     <?php endforeach; if (!$rows): ?><tr><td colspan="7" class="text-center text-muted py-3">Belum ada gaji diproses untuk periode ini.</td></tr><?php endif; ?>
     </tbody>
-    <tfoot><tr class="table-light"><th colspan="5">Total</th><th class="text-end"><?= rupiah(array_sum(array_column($rows, 'gaji_bersih'))) ?></th><th></th></tr></tfoot>
+    <tfoot><tr class="table-light"><th colspan="5">Total</th><th class="text-end"><?= rupiah($total_bersih) ?></th><th></th></tr></tfoot>
   </table>
-</div></div>
+</div>
+<?= pg_footer($total, $hal, $per) ?></div>
 <?php require APP_PATH . '/views/footer.php'; ?>

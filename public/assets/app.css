@@ -278,11 +278,12 @@ a.tile:hover { border-color: var(--ink-3); background: #FBFBF9; color: var(--tex
 .login { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); min-height: 100vh; min-height: 100dvh; }
 .login-art { position: relative; overflow: hidden; display: flex; flex-direction: column; justify-content: space-between; padding: 52px; background: var(--ink); color: #fff; }
 .login-art::before {
-  content: ''; position: absolute; width: 860px; height: 860px; right: -300px; bottom: -330px; border-radius: 50%;
+  content: ''; position: absolute; inset: 0; pointer-events: none;
   background:
-    radial-gradient(circle at center, var(--ink) 0 64px, transparent 65px),
-    repeating-radial-gradient(circle at center, rgba(226,169,59,.0) 0 30px, rgba(226,169,59,.2) 30px 33px);
+    linear-gradient(180deg, rgba(31,42,68,.80) 0%, rgba(31,42,68,.60) 45%, rgba(31,42,68,.88) 100%),
+    url('../uploads/bg-form.jpeg') center / cover no-repeat;
 }
+
 .login-art > * { position: relative; z-index: 1; }
 .login-brand { display: flex; align-items: center; gap: 12px; font: 700 1rem var(--font-display); }
 .login-brand .brand-mark.is-ring svg { width: 40px; height: 40px; }
@@ -301,7 +302,6 @@ a.tile:hover { border-color: var(--ink-3); background: #FBFBF9; color: var(--tex
 @media (max-width: 899.98px) {
   .login { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
   .login-art { padding: 22px 22px 26px; gap: 18px; }
-  .login-art::before { width: 420px; height: 420px; right: -170px; bottom: -190px; background: radial-gradient(circle at center, var(--ink) 0 34px, transparent 35px), repeating-radial-gradient(circle at center, transparent 0 18px, rgba(226,169,59,.2) 18px 20px); }
   .login-art h2 { font-size: 1.5rem; margin-bottom: 6px; max-width: none; }
   .login-art p { font-size: .95rem; }
   .login-form-wrap { align-items: flex-start; padding-top: 32px; }
@@ -311,3 +311,9 @@ a.tile:hover { border-color: var(--ink-3); background: #FBFBF9; color: var(--tex
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; } }
 
 .kas-form input[type=date] { padding-left: .65rem; padding-right: .5rem; font-size: .92rem; }
+
+/* ---------- Pagination ---------- */
+.pg-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; font-size: 0.9rem; color: var(--muted); }
+.pg-size { display: flex; align-items: center; gap: 8px; margin: 0; }
+.pg-size .form-select { width: 4rem; }
+.pagination { --bs-pagination-color: var(--ink); --bs-pagination-hover-color: var(--ink); --bs-pagination-active-bg: var(--ink); --bs-pagination-active-border-color: var(--ink); --bs-pagination-focus-box-shadow: 0 0 0 .2rem rgba(226,169,59,.38); flex-wrap: wrap; }

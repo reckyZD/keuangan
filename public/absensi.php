@@ -57,10 +57,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $periode = $_GET['periode'] ?? date('Y-m');
 $karyawan = $pdo->query('SELECT id, nama FROM karyawan WHERE aktif=1 ORDER BY nama')->fetchAll();
+[$hal, $per] = pg_params();
+$c = $pdo->prepare("SELECT COUNT(*) FROM absensi WHERE DATE_FORMAT(tanggal,'%Y-%m')=?");
+$c->execute([$periode]);
+$total = (int)$c->fetchColumn();
 $s = $pdo->prepare("SELECT a.*, k.nama, l.jam AS jam_lembur, l.total
                     FROM absensi a JOIN karyawan k ON k.id=a.karyawan_id
                     LEFT JOIN lembur l ON l.id=a.lembur_id
-                    WHERE DATE_FORMAT(a.tanggal,'%Y-%m')=? ORDER BY a.tanggal DESC, k.nama");
+                    WHERE DATE_FORMAT(a.tanggal,'%Y-%m')=? ORDER BY a.tanggal DESC, k.nama, a.id" . pg_limit($total, $hal, $per));
 $s->execute([$periode]);
 $rows = $s->fetchAll();
 require APP_PATH . '/views/header.php';
@@ -108,7 +112,8 @@ require APP_PATH . '/views/header.php';
         <?php endforeach; if (!$rows): ?><tr><td colspan="7" class="text-center text-muted py-3">Belum ada absensi.</td></tr><?php endif; ?>
         </tbody>
       </table>
-    </div></div>
+    </div>
+    <?= pg_footer($total, $hal, $per) ?></div>
   </div>
 </div>
 <?php require APP_PATH . '/views/footer.php'; ?>

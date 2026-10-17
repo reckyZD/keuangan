@@ -32,7 +32,9 @@ $edit = null;
 if (isset($_GET['edit'])) {
     $s = $pdo->prepare('SELECT * FROM karyawan WHERE id=?'); $s->execute([(int)$_GET['edit']]); $edit = $s->fetch();
 }
-$rows = $pdo->query('SELECT * FROM karyawan ORDER BY nama')->fetchAll();
+[$hal, $per] = pg_params();
+$total = (int)$pdo->query('SELECT COUNT(*) FROM karyawan')->fetchColumn();
+$rows = $pdo->query('SELECT * FROM karyawan ORDER BY nama, id' . pg_limit($total, $hal, $per))->fetchAll();
 require APP_PATH . '/views/header.php';
 ?>
 <div class="row g-4">
@@ -76,7 +78,8 @@ require APP_PATH . '/views/header.php';
         <?php endforeach; if (!$rows): ?><tr><td colspan="7" class="text-center text-muted py-3">Belum ada data.</td></tr><?php endif; ?>
         </tbody>
       </table>
-    </div></div>
+    </div>
+    <?= pg_footer($total, $hal, $per) ?></div>
   </div>
 </div>
 <?php require APP_PATH . '/views/footer.php'; ?>
