@@ -5,7 +5,28 @@ $title = 'Lembur';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
-    if (($_POST['aksi'] ?? '') === 'hapus') {
+    if (($_POST['aksi'] ?? '') === 'hapus_banyak') {
+        $p_hapus = preg_match('/^\d{4}-\d{2}$/', (string)($_POST['periode'] ?? '')) ? $_POST['periode'] : date('Y-m');
+        try {
+            if (!empty($_POST['semua_periode'])) {               // seluruh data pada periode yang sedang ditampilkan
+                $d = $pdo->prepare("DELETE FROM lembur WHERE DATE_FORMAT(tanggal,'%Y-%m')=?");
+                $d->execute([$p_hapus]);
+                $n = $d->rowCount();
+            } else {                                              // baris yang dicentang
+                $ids = array_values(array_unique(array_filter(array_map('intval', (array)($_POST['ids'] ?? [])))));
+                $n = 0;
+                foreach (array_chunk($ids, 500) as $grup) {
+                    $d = $pdo->prepare('DELETE FROM lembur WHERE id IN (' . implode(',', array_fill(0, count($grup), '?')) . ')');
+                    $d->execute($grup);
+                    $n += $d->rowCount();
+                }
+            }
+            flash($n ? "$n data lembur dihapus." : 'Tidak ada data yang dipilih.', $n ? 'success' : 'danger');
+        } catch (Throwable $t) {
+            flash('Gagal menghapus data terpilih.', 'danger');
+        }
+        redirect('lembur.php?periode=' . $p_hapus);
+    } elseif (($_POST['aksi'] ?? '') === 'hapus') {
         $pdo->prepare('DELETE FROM lembur WHERE id=?')->execute([(int)$_POST['id']]);
         flash('Data lembur dihapus.');
     } else {
@@ -63,20 +84,30 @@ require APP_PATH . '/views/header.php';
       <div class="col-auto"><input type="month" name="periode" class="form-control" value="<?= e($periode) ?>"></div>
       <div class="col-auto"><button class="btn btn-outline-primary">Tampilkan</button></div>
     </form>
-    <div class="card"><div class="table-responsive">
+    <form id="form-hapus-banyak" method="post" class="d-none" data-total="<?= (int)$total ?>" data-catatan="Tidak bisa dibatalkan."><?= csrf_field() ?>
+      <input type="hidden" name="aksi" value="hapus_banyak"><input type="hidden" name="periode" value="<?= e($periode) ?>"><input type="hidden" name="semua_periode" id="semua-periode" value="">
+    </form>
+    <div class="card">
+      <div class="card-body py-2 border-bottom bg-light d-flex flex-wrap align-items-center gap-2 d-none" id="bulk-bar">
+        <span class="fw-semibold" id="jml-dipilih">0 dipilih</span>
+        <button class="btn btn-sm btn-danger" form="form-hapus-banyak">Hapus terpilih</button>
+        <button type="button" class="btn btn-sm btn-link d-none" id="pilih-semua-periode"></button>
+      </div>
+      <div class="table-responsive">
       <table class="table table-hover mb-0 align-middle">
-        <thead><tr><th>Tanggal</th><th>Karyawan</th><th>Jam</th><th>Jenis</th><th class="text-end">Total</th><th></th></tr></thead>
+        <thead><tr><th style="width:36px"><input type="checkbox" class="form-check-input" id="cek-semua" aria-label="Pilih semua di halaman ini"></th><th>Tanggal</th><th>Karyawan</th><th>Jam</th><th>Jenis</th><th class="text-end">Total</th><th></th></tr></thead>
         <tbody>
         <?php foreach ($rows as $r): ?>
-          <tr><td><?= e(tgl($r['tanggal'])) ?></td><td><?= e($r['nama']) ?></td><td><?= e($r['jam']) ?></td>
+          <tr><td><input type="checkbox" class="form-check-input cek-baris" name="ids[]" value="<?= (int)$r['id'] ?>" form="form-hapus-banyak" aria-label="Pilih baris"></td>
+            <td><?= e(tgl($r['tanggal'])) ?></td><td><?= e($r['nama']) ?></td><td><?= e($r['jam']) ?></td>
             <td><?= $r['tipe'] === 'libur' ? 'Libur' : 'Hari kerja' ?></td>
             <td class="text-end"><?= rupiah($r['total']) ?></td>
             <td class="text-end"><form method="post" onsubmit="return confirm('Hapus?')"><?= csrf_field() ?>
               <input type="hidden" name="aksi" value="hapus"><input type="hidden" name="id" value="<?= (int)$r['id'] ?>">
               <button class="btn btn-sm btn-outline-danger">Hapus</button></form></td></tr>
-        <?php endforeach; if (!$rows): ?><tr><td colspan="6" class="text-center text-muted py-3">Belum ada lembur.</td></tr><?php endif; ?>
+        <?php endforeach; if (!$rows): ?><tr><td colspan="7" class="text-center text-muted py-3">Belum ada lembur.</td></tr><?php endif; ?>
         </tbody>
-        <tfoot><tr class="table-light"><th colspan="4">Total periode</th><th class="text-end"><?= rupiah($grand) ?></th><th></th></tr></tfoot>
+        <tfoot><tr class="table-light"><th colspan="5">Total periode</th><th class="text-end"><?= rupiah($grand) ?></th><th></th></tr></tfoot>
       </table>
     </div>
     <?= pg_footer($total, $hal, $per) ?></div>

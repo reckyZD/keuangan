@@ -231,6 +231,36 @@ function gaji_pokok_periode(float $gp, string $k): float {
     return $gp;
 }
 
+/** Skema pekerja harian: upah per hari di data karyawan; jumlah hari & upah/hari disimpan di slip. Aman dipanggil berulang (di luar transaksi). */
+function pastikan_kolom_harian(): void {
+    global $pdo;
+    static $selesai = false;
+    if ($selesai) return;
+    $selesai = true;
+    $ada = static function (string $tabel, string $kolom) use ($pdo): bool {
+        $s = $pdo->prepare('SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?');
+        $s->execute([$tabel, $kolom]);
+        return (bool)$s->fetchColumn();
+    };
+    try {
+        if (!$ada('karyawan', 'upah_harian')) $pdo->exec('ALTER TABLE karyawan ADD COLUMN upah_harian DECIMAL(15,2) NOT NULL DEFAULT 0 AFTER gaji_pokok');
+        if (!$ada('gaji', 'hari_kerja'))      $pdo->exec('ALTER TABLE gaji ADD COLUMN hari_kerja INT NOT NULL DEFAULT 0');
+        if (!$ada('gaji', 'upah_harian'))     $pdo->exec('ALTER TABLE gaji ADD COLUMN upah_harian DECIMAL(15,2) NOT NULL DEFAULT 0');
+    } catch (Throwable $t) {}
+}
+
+/**
+ * Jumlah hari hadir tiap karyawan pada rentang tanggal => [karyawan_id => jumlah].
+ * Hanya hari kerja biasa: hadir di hari libur (Minggu / tanggal merah) dibayar lewat lembur, bukan upah harian.
+ */
+function hari_hadir_periode(string $awal, string $akhir): array {
+    global $pdo;
+    $libur = implode(',', array_map('intval', HARI_LIBUR)) ?: '0';
+    $s = $pdo->prepare("SELECT karyawan_id, COUNT(*) FROM absensi WHERE tanggal BETWEEN ? AND ? AND tanggal_merah = 0 AND (WEEKDAY(tanggal) + 1) NOT IN ($libur) GROUP BY karyawan_id");
+    $s->execute([$awal, $akhir]);
+    return $s->fetchAll(PDO::FETCH_KEY_PAIR);
+}
+
 /** Tabel rincian potongan kasbon per slip, dipakai tombol Reset untuk mengembalikan sisa kasbon. Aman dipanggil berulang. */
 function pastikan_tabel_potongan(): void {
     global $pdo;
@@ -336,7 +366,7 @@ function brand_mark(string $class = ''): string {
 function kas_kategori(): array {
     global $pdo;
     $def = [
-        'masuk'  => ['Penjualan', 'Tarik Tunai', 'Lain-lain'],
+        'masuk'  => ['Penjualan', 'Lain-lain'],
         'keluar' => ['Operasional', 'Transport', 'Pembelian', 'Kasbon'],
     ];
     $out = ['masuk' => [], 'keluar' => []];

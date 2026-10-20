@@ -6,6 +6,44 @@ $title = 'Absensi';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
 
+    if (($_POST['aksi'] ?? '') === 'hapus_banyak') {
+        $p_hapus = preg_match('/^\d{4}-\d{2}$/', (string)($_POST['periode'] ?? '')) ? $_POST['periode'] : date('Y-m');
+        $pdo->beginTransaction();
+        try {
+            $lids = [];
+            if (!empty($_POST['semua_periode'])) {               // seluruh data pada periode yang sedang ditampilkan
+                $s = $pdo->prepare("SELECT lembur_id FROM absensi WHERE DATE_FORMAT(tanggal,'%Y-%m')=? AND lembur_id IS NOT NULL");
+                $s->execute([$p_hapus]);
+                $lids = $s->fetchAll(PDO::FETCH_COLUMN);
+                $d = $pdo->prepare("DELETE FROM absensi WHERE DATE_FORMAT(tanggal,'%Y-%m')=?");
+                $d->execute([$p_hapus]);
+                $n = $d->rowCount();
+            } else {                                              // baris yang dicentang
+                $ids = array_values(array_unique(array_filter(array_map('intval', (array)($_POST['ids'] ?? [])))));
+                $n = 0;
+                foreach (array_chunk($ids, 500) as $grup) {
+                    $in = implode(',', array_fill(0, count($grup), '?'));
+                    $s = $pdo->prepare("SELECT lembur_id FROM absensi WHERE id IN ($in) AND lembur_id IS NOT NULL");
+                    $s->execute($grup);
+                    $lids = array_merge($lids, $s->fetchAll(PDO::FETCH_COLUMN));
+                    $d = $pdo->prepare("DELETE FROM absensi WHERE id IN ($in)");
+                    $d->execute($grup);
+                    $n += $d->rowCount();
+                }
+            }
+            foreach (array_chunk($lids, 500) as $grup) {
+                $in = implode(',', array_fill(0, count($grup), '?'));
+                $pdo->prepare("DELETE FROM lembur WHERE id IN ($in)")->execute($grup);
+            }
+            $pdo->commit();
+            flash($n ? "$n absensi (dan lembur terkait) dihapus." : 'Tidak ada data yang dipilih.', $n ? 'success' : 'danger');
+        } catch (Throwable $t) {
+            $pdo->rollBack();
+            flash('Gagal menghapus data terpilih.', 'danger');
+        }
+        redirect('absensi.php?periode=' . $p_hapus);
+    }
+
     if (($_POST['aksi'] ?? '') === 'hapus') {
         $pdo->beginTransaction();
         $s = $pdo->prepare('SELECT lembur_id FROM absensi WHERE id=?');
@@ -97,19 +135,29 @@ require APP_PATH . '/views/header.php';
       <div class="col-auto"><input type="month" name="periode" class="form-control" value="<?= e($periode) ?>"></div>
       <div class="col-auto"><button class="btn btn-outline-primary">Tampilkan</button></div>
     </form>
-    <div class="card"><div class="table-responsive">
+    <form id="form-hapus-banyak" method="post" class="d-none" data-total="<?= (int)$total ?>" data-catatan="Lembur terkait ikut terhapus. Tidak bisa dibatalkan."><?= csrf_field() ?>
+      <input type="hidden" name="aksi" value="hapus_banyak"><input type="hidden" name="periode" value="<?= e($periode) ?>"><input type="hidden" name="semua_periode" id="semua-periode" value="">
+    </form>
+    <div class="card">
+      <div class="card-body py-2 border-bottom bg-light d-flex flex-wrap align-items-center gap-2 d-none" id="bulk-bar">
+        <span class="fw-semibold" id="jml-dipilih">0 dipilih</span>
+        <button class="btn btn-sm btn-danger" form="form-hapus-banyak">Hapus terpilih</button>
+        <button type="button" class="btn btn-sm btn-link d-none" id="pilih-semua-periode"></button>
+      </div>
+      <div class="table-responsive">
       <table class="table table-hover mb-0 align-middle">
-        <thead><tr><th>Tanggal</th><th>Karyawan</th><th>Masuk</th><th>Keluar</th><th>Lembur</th><th class="text-end">Upah Lembur</th><th></th></tr></thead>
+        <thead><tr><th style="width:36px"><input type="checkbox" class="form-check-input" id="cek-semua" aria-label="Pilih semua di halaman ini"></th><th>Tanggal</th><th>Karyawan</th><th>Masuk</th><th>Keluar</th><th>Lembur</th><th class="text-end">Upah Lembur</th><th></th></tr></thead>
         <tbody>
         <?php foreach ($rows as $r): ?>
-          <tr><td><?= e(tgl($r['tanggal'])) ?></td><td><?= e($r['nama']) ?></td>
+          <tr><td><input type="checkbox" class="form-check-input cek-baris" name="ids[]" value="<?= (int)$r['id'] ?>" form="form-hapus-banyak" aria-label="Pilih baris"></td>
+            <td><?= e(tgl($r['tanggal'])) ?></td><td><?= e($r['nama']) ?></td>
             <td><?= e(substr($r['jam_masuk'], 0, 5)) ?></td><td><?= e(substr($r['jam_keluar'], 0, 5)) ?></td>
             <td><?= $r['jam_lembur'] ? e($r['jam_lembur']) . ' jam' : '-' ?></td>
             <td class="text-end"><?= $r['total'] ? rupiah($r['total']) : '-' ?></td>
             <td class="text-end"><form method="post" onsubmit="return confirm('Hapus absensi ini beserta lemburnya?')"><?= csrf_field() ?>
               <input type="hidden" name="aksi" value="hapus"><input type="hidden" name="id" value="<?= (int)$r['id'] ?>">
               <button class="btn btn-sm btn-outline-danger">Hapus</button></form></td></tr>
-        <?php endforeach; if (!$rows): ?><tr><td colspan="7" class="text-center text-muted py-3">Belum ada absensi.</td></tr><?php endif; ?>
+        <?php endforeach; if (!$rows): ?><tr><td colspan="8" class="text-center text-muted py-3">Belum ada absensi.</td></tr><?php endif; ?>
         </tbody>
       </table>
     </div>

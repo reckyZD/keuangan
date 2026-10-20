@@ -2,25 +2,60 @@
 require __DIR__ . '/../app/bootstrap.php';
 require_login();
 $title = 'Import absensi fingerprint';
-$subtitle = 'Unggah file CSV / ATTLOG dari mesin fingerprint; lembur dihitung otomatis.';
+$subtitle = 'Unggah laporan fingerprint (.xls / .xlsx / .csv / .dat); lembur dihitung otomatis.';
 
 /* ---------- helper ---------- */
 function baca_csv(string $path, int $limit = 0): array {
-    $fh = fopen($path, 'r');
-    $first = (string)fgets($fh);
-    rewind($fh);
-    if (substr($first, 0, 3) === "\xEF\xBB\xBF") fseek($fh, 3);   // buang BOM
+    $raw = (string)file_get_contents($path);
+    // Excel "Unicode Text" = UTF-16; buang BOM
+    if (substr($raw, 0, 2) === "\xFF\xFE" || substr($raw, 0, 2) === "\xFE\xFF") {
+        $raw = function_exists('mb_convert_encoding') ? mb_convert_encoding($raw, 'UTF-8', 'UTF-16') : (string)iconv('UTF-16', 'UTF-8//IGNORE', $raw);
+    } elseif (substr($raw, 0, 3) === "\xEF\xBB\xBF") {
+        $raw = substr($raw, 3);
+    }
+    $lines = explode("\n", str_replace(["\r\n", "\r"], "\n", $raw));
+
+    $first = '';
+    foreach ($lines as $l) { if (trim($l) !== '') { $first = $l; break; } }
     $c = [',' => substr_count($first, ','), ';' => substr_count($first, ';'), "\t" => substr_count($first, "\t")];
     arsort($c);
     $del = array_key_first($c);
+    $spasi = $c[$del] === 0;            // tidak ada pemisah sama sekali -> pisahkan dengan spasi
+
     $rows = [];
-    while (($r = fgetcsv($fh, 0, $del, '"', '')) !== false) {
-        if ($r === [null]) continue;                                // baris kosong
+    foreach ($lines as $l) {
+        if (trim($l) === '') continue;
+        $r = $spasi ? preg_split('/\s+/', trim($l)) : str_getcsv($l, $del, '"', '');
         $rows[] = array_map('trim', $r);
         if ($limit && count($rows) >= $limit) break;
     }
-    fclose($fh);
     return $rows;
+}
+
+/** Ringkasan per karyawan untuk CSV hasil konversi XLS (kolom: PIN, Nama, Waktu). */
+function ringkas_log(string $path, array $map): ?array {
+    $rows = baca_csv($path);
+    if (strtolower($rows[0][0] ?? '') !== 'pin' || strtolower($rows[0][2] ?? '') !== 'waktu') return null;
+    array_shift($rows);
+    $per = []; $dari = $sampai = null;
+    foreach ($rows as $r) {
+        $pin = norm_pin($r[0] ?? '');
+        $w = $r[2] ?? '';
+        if ($pin === '' || !preg_match('/^\d{4}-\d{2}-\d{2}/', $w)) continue;
+        $tgl = substr($w, 0, 10);
+        if (!isset($per[$pin])) $per[$pin] = ['nama' => $r[1] ?? '', 'hari' => [], 'scan' => 0];
+        $per[$pin]['hari'][$tgl] = true;
+        $per[$pin]['scan']++;
+        if ($dari === null || $tgl < $dari) $dari = $tgl;
+        if ($sampai === null || $tgl > $sampai) $sampai = $tgl;
+    }
+    if (!$per) return null;
+    ksort($per, SORT_NATURAL);
+    foreach ($per as $pin => $p) {
+        $per[$pin]['hari'] = count($p['hari']);
+        $per[$pin]['k'] = $map[$pin] ?? null;
+    }
+    return ['per' => $per, 'dari' => $dari, 'sampai' => $sampai, 'scan' => array_sum(array_column($per, 'scan'))];
 }
 
 function parse_waktu(string $t, string $fmt): ?string {
@@ -103,6 +138,7 @@ function tebak_pengaturan(array $preview): array {
 
 /* ---------- proses ---------- */
 $preview = null;
+$ringkas = null;
 $hasil = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -122,6 +158,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $_SESSION['import_file'] = $tmp;
         $preview = baca_csv($tmp, 8);
         if (!$preview) { hapus_temp(); flash('File kosong.', 'danger'); redirect('import_absensi.php'); }
+        if (($_POST['sumber'] ?? '') === 'xls') {          // hasil konversi laporan XLS: tampilkan ringkasan, lewati pencocokan kolom
+            $peta = [];
+            foreach ($pdo->query('SELECT * FROM karyawan WHERE aktif=1 AND pin_fingerprint IS NOT NULL')->fetchAll() as $k) {
+                $peta[norm_pin($k['pin_fingerprint'])] = $k;
+            }
+            $ringkas = ringkas_log($tmp, $peta);
+        }
     }
 
     if ($aksi === 'proses') {
@@ -240,6 +283,43 @@ require APP_PATH . '/views/header.php';
     <a href="lembur.php" class="btn btn-outline-primary btn-sm">Lihat Lembur</a>
   </div></div>
 
+<?php elseif ($ringkas): ?>
+  <?php $tak = array_filter($ringkas['per'], fn($p) => !$p['k']); $cocok = count($ringkas['per']) - count($tak); ?>
+  <div class="card mb-3"><div class="card-header">Langkah 2: Periksa &amp; Proses</div><div class="card-body">
+    <p class="mb-3">Periode <b><?= e(tgl($ringkas['dari'])) ?></b> s/d <b><?= e(tgl($ringkas['sampai'])) ?></b>:
+      <b><?= (int)$ringkas['scan'] ?></b> scan dari <b><?= count($ringkas['per']) ?></b> karyawan yang punya data.</p>
+    <div class="table-responsive mb-3"><table class="table table-sm align-middle mb-0">
+      <thead><tr><th>PIN</th><th>Nama di file</th><th>Karyawan di aplikasi</th><th class="text-end">Hari ada scan</th><th class="text-end">Jumlah scan</th><th>Status</th></tr></thead>
+      <tbody>
+      <?php foreach ($ringkas['per'] as $pin => $p): ?>
+        <tr>
+          <td><?= e($pin) ?></td>
+          <td><?= e($p['nama']) ?></td>
+          <td><?= $p['k'] ? e($p['k']['nama']) : '<span class="text-muted">-</span>' ?></td>
+          <td class="text-end"><?= (int)$p['hari'] ?></td>
+          <td class="text-end"><?= (int)$p['scan'] ?></td>
+          <td><?= $p['k'] ? '<span class="badge text-bg-success">Cocok</span>' : '<span class="badge text-bg-warning">PIN belum terdaftar</span>' ?></td>
+        </tr>
+      <?php endforeach; ?>
+      </tbody>
+    </table></div>
+    <?php if ($tak): ?>
+      <div class="alert alert-warning py-2"><?= count($tak) ?> PIN belum cocok dengan data karyawan, jadi dilewati. Isi kolom PIN di menu <a href="karyawan.php">Karyawan</a>
+        (sama dengan nomor di laporan), lalu import ulang file yang sama (aman, tidak akan dobel).</div>
+    <?php endif; ?>
+    <form method="post"><?= csrf_field() ?><input type="hidden" name="aksi" value="proses">
+      <input type="hidden" name="kol_pin" value="0"><input type="hidden" name="kol_waktu" value="2"><input type="hidden" name="kol_jam" value="">
+      <input type="hidden" name="fmt" value="ymd"><input type="hidden" name="header" value="1">
+      <div class="row g-3">
+        <div class="col-md-8"><label class="form-label">Tanggal merah / libur nasional dalam periode ini (opsional)</label>
+          <input name="tanggal_merah" class="form-control" placeholder="2026-12-25, 2026-12-31 (format tahun-bulan-hari, pisahkan koma)"></div>
+        <div class="col-12"><div class="form-check"><input class="form-check-input" type="checkbox" name="timpa" id="timpa"><label class="form-check-label" for="timpa">Timpa absensi yang sudah ada pada tanggal yang sama</label></div></div>
+      </div>
+      <button class="btn btn-success mt-3" <?= $cocok ? '' : 'disabled' ?>>Proses Import (<?= $cocok ?> karyawan)</button>
+      <a href="import_absensi.php" class="btn btn-secondary mt-3">Batal</a>
+    </form>
+  </div></div>
+
 <?php elseif ($preview): ?>
   <?php
     [$punya_header, $guess_p, $guess_w, $guess_j, $guess_fmt] = tebak_pengaturan($preview);
@@ -281,17 +361,19 @@ require APP_PATH . '/views/header.php';
   </div></div>
 
 <?php else: ?>
-  <div class="card mb-3"><div class="card-header">Langkah 1: Unggah File CSV</div><div class="card-body">
-    <form method="post" enctype="multipart/form-data"><?= csrf_field() ?><input type="hidden" name="aksi" value="upload">
-      <div class="mb-3"><input type="file" name="csv" accept=".csv,.txt,.dat" class="form-control" required></div>
-      <button class="btn btn-primary">Unggah &amp; Lihat Preview</button>
+  <div class="card mb-3"><div class="card-header">Langkah 1: Unggah File Fingerprint</div><div class="card-body">
+    <form method="post" enctype="multipart/form-data" id="form-upload"><?= csrf_field() ?><input type="hidden" name="aksi" value="upload"><input type="hidden" name="sumber" id="fp-sumber" value="">
+      <div class="mb-3"><input type="file" name="csv" accept=".xls,.xlsx,.csv,.txt,.dat" class="form-control" required>
+        <div class="hint mt-1" id="fp-info">Bisa langsung file laporan dari software mesin (contoh: <code>001_2026_10_MON.XLS</code>), tanpa disimpan ulang.</div></div>
+      <button class="btn btn-primary" id="fp-btn">Unggah &amp; Lihat Preview</button>
     </form>
   </div></div>
   <div class="alert alert-info small">
     <b>Syarat &amp; cara kerja</b>
     <ul class="mb-0">
       <li>Isi kolom <b>PIN / ID Fingerprint</b> tiap karyawan di menu <a href="karyawan.php">Karyawan</a> (sama dengan ID di mesin).</li>
-      <li>Format yang didukung: <b>.csv</b> (koma, titik koma, atau tab dikenali otomatis), serta <b>.dat</b> dari mesin (ZKTeco, unduhan flashdisk). Jika berkas dari Excel (.xls/.xlsx), buka lalu <i>Simpan Sebagai</i> CSV dulu.</li>
+      <li>Format yang didukung: <b>.xls / .xlsx</b> laporan dari software mesin (yang punya sheet <b>Log</b>; dibaca langsung di browser), <b>.csv</b> (koma, titik koma, atau tab dikenali otomatis), serta <b>.dat</b> dari mesin (ZKTeco, unduhan flashdisk).</li>
+      <li>Untuk file .xls/.xlsx, angka di kolom <b>No</b> pada laporan dianggap <b>PIN</b>, jadi harus sama dengan PIN di menu Karyawan. Sheet lain (Rekap, Laporan Kehadiran) tidak dipakai.</li>
       <li>Yang dibutuhkan hanya kolom PIN dan tanggal-jam scan. Kolom lain (nama, status masuk/pulang, verifikasi) diabaikan.</li>
       <li>Scan <b>pertama</b> di satu tanggal = jam masuk, scan <b>terakhir</b> = jam keluar, lalu lembur dihitung dengan aturan di <code>config.php</code>.</li>
       <li>Import file yang sama berulang kali aman: scan duplikat diabaikan dan absensi yang sudah ada tidak dobel.</li>
@@ -303,5 +385,40 @@ require APP_PATH . '/views/header.php';
       <a href="samples/2_laporan_excel_titik_koma.csv" download>2. CSV Excel (titik koma)</a> |
       <a href="samples/3_tanggal_jam_terpisah.csv" download>3. Tanggal &amp; jam terpisah</a></div>
   </div>
+<?php endif; ?>
+<?php if (!$hasil && !$preview): ?>
+<?php $sheetjs = is_file(__DIR__ . '/assets/xlsx.full.min.js') ? 'assets/xlsx.full.min.js' : 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'; ?>
+<script src="<?= e($sheetjs) ?>"></script>
+<script src="assets/fp_xls.js"></script>
+<script>
+(function () {
+  var form = document.getElementById('form-upload');
+  if (!form) return;
+  var input = form.querySelector('input[type=file]'), info = document.getElementById('fp-info'), btn = document.getElementById('fp-btn');
+  form.addEventListener('submit', function (ev) {
+    var f = input.files[0];
+    if (!f || !/\.xlsx?$/i.test(f.name)) return;          // csv/txt/dat: kirim apa adanya
+    ev.preventDefault();
+    btn.disabled = true; info.textContent = 'Membaca file Excel...';
+    var gagal = function (m) { btn.disabled = false; info.textContent = m; info.className = 'hint mt-1 text-danger'; };
+    if (!window.XLSX || !window.FpXls) { gagal('Pembaca Excel gagal dimuat. Pastikan terhubung ke internet, atau simpan file sebagai .csv dulu.'); return; }
+    f.arrayBuffer().then(function (buf) {
+      var wb = XLSX.read(buf, { type: 'array' });
+      var nama = wb.SheetNames.filter(function (n) { return /^log$/i.test(n); })[0] ||
+                 wb.SheetNames.filter(function (n) { var a = wb.Sheets[n]['A1']; return a && /data\s*log/i.test(String(a.v)); })[0];
+      if (!nama) throw new Error('Sheet "Log" tidak ditemukan di file ini. Pastikan ini laporan fingerprint yang berisi Data Log.');
+      var aoa = XLSX.utils.sheet_to_json(wb.Sheets[nama], { header: 1, raw: false, defval: '' });
+      var r = FpXls.logKeCsv(aoa);
+      if (!r.jumlah) throw new Error('Tidak ada data scan di sheet Log.');
+      var dt = new DataTransfer();
+      dt.items.add(new File([r.csv], 'log_fingerprint.csv', { type: 'text/csv' }));
+      input.files = dt.files;
+      document.getElementById('fp-sumber').value = 'xls';
+      info.textContent = r.jumlah + ' scan dari ' + r.karyawan + ' karyawan (' + r.dari + ' s/d ' + r.sampai + ') terbaca. Mengunggah...';
+      form.submit();
+    }).catch(function (e) { gagal(e.message || 'File tidak bisa dibaca.'); });
+  });
+})();
+</script>
 <?php endif; ?>
 <?php require APP_PATH . '/views/footer.php'; ?>

@@ -15,7 +15,8 @@ CREATE TABLE karyawan (
   nip VARCHAR(30) NOT NULL UNIQUE,
   nama VARCHAR(100) NOT NULL,
   jabatan VARCHAR(100) DEFAULT NULL,
-  gaji_pokok DECIMAL(15,2) NOT NULL DEFAULT 0,
+  gaji_pokok DECIMAL(15,2) NOT NULL DEFAULT 0,          -- tidak dipakai lagi (pekerja harian)
+  upah_harian DECIMAL(15,2) NOT NULL DEFAULT 0,         -- upah per hari hadir, beda tiap karyawan
   pin_fingerprint VARCHAR(30) DEFAULT NULL UNIQUE,
   aktif TINYINT(1) NOT NULL DEFAULT 1
 ) ENGINE=InnoDB;
@@ -48,7 +49,9 @@ CREATE TABLE gaji (
   id INT AUTO_INCREMENT PRIMARY KEY,
   karyawan_id INT NOT NULL,
   periode VARCHAR(12) NOT NULL,         -- YYYY-MM | YYYY-MM-1/2 (2x sebulan) | YYYY-MM-DD (tiap 2 minggu)
-  gaji_pokok DECIMAL(15,2) NOT NULL,
+  gaji_pokok DECIMAL(15,2) NOT NULL,                     -- = total upah harian (hari_kerja x upah_harian)
+  hari_kerja INT NOT NULL DEFAULT 0,
+  upah_harian DECIMAL(15,2) NOT NULL DEFAULT 0,
   total_lembur DECIMAL(15,2) NOT NULL DEFAULT 0,
   potongan_kasbon DECIMAL(15,2) NOT NULL DEFAULT 0,
   gaji_bersih DECIMAL(15,2) NOT NULL,

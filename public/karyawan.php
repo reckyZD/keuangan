@@ -1,6 +1,7 @@
 <?php
 require __DIR__ . '/../app/bootstrap.php';
 require_login();
+pastikan_kolom_harian();
 $title = 'Karyawan';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -12,13 +13,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             flash('Karyawan dihapus.');
         } else {
             $pin = norm_pin($_POST['pin'] ?? '');
-            $d = [trim($_POST['nip']), trim($_POST['nama']), trim($_POST['jabatan']), (float)$_POST['gaji_pokok'], $pin === '' ? null : $pin, isset($_POST['aktif']) ? 1 : 0];
+            $d = [trim($_POST['nip']), trim($_POST['nama']), trim($_POST['jabatan']), (float)$_POST['upah_harian'], $pin === '' ? null : $pin, isset($_POST['aktif']) ? 1 : 0];
             if ($aksi === 'edit') {
-                $pdo->prepare('UPDATE karyawan SET nip=?, nama=?, jabatan=?, gaji_pokok=?, pin_fingerprint=?, aktif=? WHERE id=?')
+                $pdo->prepare('UPDATE karyawan SET nip=?, nama=?, jabatan=?, upah_harian=?, pin_fingerprint=?, aktif=? WHERE id=?')
                     ->execute([...$d, (int)$_POST['id']]);
                 flash('Data karyawan diperbarui.');
             } else {
-                $pdo->prepare('INSERT INTO karyawan (nip,nama,jabatan,gaji_pokok,pin_fingerprint,aktif) VALUES (?,?,?,?,?,?)')->execute($d);
+                $pdo->prepare('INSERT INTO karyawan (nip,nama,jabatan,upah_harian,pin_fingerprint,aktif) VALUES (?,?,?,?,?,?)')->execute($d);
                 flash('Karyawan ditambahkan.');
             }
         }
@@ -48,7 +49,7 @@ require APP_PATH . '/views/header.php';
         <div class="mb-2"><label class="form-label">NIP</label><input name="nip" class="form-control" required value="<?= e($edit['nip'] ?? '') ?>"></div>
         <div class="mb-2"><label class="form-label">Nama</label><input name="nama" class="form-control" required value="<?= e($edit['nama'] ?? '') ?>"></div>
         <div class="mb-2"><label class="form-label">Jabatan</label><input name="jabatan" class="form-control" value="<?= e($edit['jabatan'] ?? '') ?>"></div>
-        <div class="mb-2"><label class="form-label">Gaji Pokok (per bulan)</label><input type="number" min="0" step="1" name="gaji_pokok" class="form-control" required value="<?= e($edit['gaji_pokok'] ?? '') ?>"></div>
+        <div class="mb-2"><label class="form-label">Upah per hari (Rp)</label><input type="number" min="0" step="1" name="upah_harian" class="form-control" required value="<?= e($edit['upah_harian'] ?? '') ?>"><div class="hint mt-1">Pekerja harian: upah per hari hadir, boleh berbeda tiap karyawan (sesuai masa kerja).</div></div>
         <div class="mb-2"><label class="form-label">PIN / ID Fingerprint</label><input name="pin" class="form-control" placeholder="ID karyawan di mesin fingerprint" value="<?= e($edit['pin_fingerprint'] ?? '') ?>"></div>
         <div class="form-check mb-3"><input class="form-check-input" type="checkbox" name="aktif" id="aktif" <?= ($edit['aktif'] ?? 1) ? 'checked' : '' ?>><label class="form-check-label" for="aktif">Aktif</label></div>
         <button class="btn btn-primary">Simpan</button>
@@ -59,12 +60,12 @@ require APP_PATH . '/views/header.php';
   <div class="col-lg-8">
     <div class="card"><div class="table-responsive">
       <table class="table table-hover mb-0 align-middle">
-        <thead><tr><th>NIP</th><th>Nama</th><th>Jabatan</th><th class="text-end">Gaji Pokok</th><th>PIN Finger</th><th>Status</th><th></th></tr></thead>
+        <thead><tr><th>NIP</th><th>Nama</th><th>Jabatan</th><th class="text-end">Upah / Hari</th><th>PIN Finger</th><th>Status</th><th></th></tr></thead>
         <tbody>
         <?php foreach ($rows as $r): ?>
           <tr>
             <td><?= e($r['nip']) ?></td><td><?= e($r['nama']) ?></td><td><?= e($r['jabatan']) ?></td>
-            <td class="text-end"><?= rupiah($r['gaji_pokok']) ?></td>
+            <td class="text-end"><?= (float)$r['upah_harian'] > 0 ? rupiah($r['upah_harian']) : '<span class="text-danger">belum diisi</span>' ?></td>
             <td><?= e($r['pin_fingerprint']) ?></td>
             <td><span class="badge text-bg-<?= $r['aktif'] ? 'success' : 'secondary' ?>"><?= $r['aktif'] ? 'Aktif' : 'Nonaktif' ?></span></td>
             <td class="text-end text-nowrap">

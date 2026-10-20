@@ -129,14 +129,6 @@ require APP_PATH . '/views/header.php';
           </div>
           <div class="col-12"><p class="hint mb-0">Khusus tiap 2 minggu. Periode berikutnya otomatis tiap 14 hari dan selalu berakhir di hari yang sama dengan tanggal "sampai" (mis. 19 Sep - 3 Okt, lalu 4 - 17 Okt, 18 - 31 Okt, dst.).</p></div>
         </div>
-        <div>
-          <label class="form-label" for="gaji_pokok_cara">Pembayaran gaji pokok</label>
-          <select class="form-select" id="gaji_pokok_cara" name="gaji_pokok_cara">
-            <option value="penuh"          <?= $co['gaji_pokok_cara'] === 'penuh' ? 'selected' : '' ?>>Dibayar utuh setiap gajian (tidak dibagi)</option>
-            <option value="sekali_sebulan" <?= $co['gaji_pokok_cara'] === 'sekali_sebulan' ? 'selected' : '' ?>>Dibayar utuh sekali sebulan (di gajian pertama bulan itu)</option>
-            <option value="dibagi"         <?= $co['gaji_pokok_cara'] === 'dibagi' ? 'selected' : '' ?>>Dibagi rata per gajian (nominal di data Karyawan = gaji sebulan)</option>
-          </select>
-        </div>
         <p class="hint mt-3 mb-0">Mengganti pengaturan ini tidak mengubah gaji dan slip yang sudah diproses. Cicilan kasbon dipotong sebesar nilai cicilan pada setiap gajian.</p>
       </div>
     </div>

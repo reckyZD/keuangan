@@ -87,7 +87,7 @@ $jam_fmt = fn(float $j) => rtrim(rtrim(number_format($j, 1, ',', '.'), '0'), ','
         <table>
           <thead><tr><th colspan="2">Pendapatan</th></tr></thead>
           <tbody>
-            <tr><td>Gaji pokok</td><td class="n"><?= rupiah($g['gaji_pokok']) ?></td></tr>
+            <tr><td><?= (int)($g['hari_kerja'] ?? 0) > 0 ? e('Upah harian (' . (int)$g['hari_kerja'] . ' hari x ' . rupiah($g['upah_harian']) . ')') : 'Gaji pokok' ?></td><td class="n"><?= rupiah($g['gaji_pokok']) ?></td></tr>
             <tr><td>Upah lembur<?= $g['jam_lembur'] > 0 ? ' (' . e($jam_fmt($g['jam_lembur'])) . ' jam)' : '' ?></td><td class="n"><?= rupiah($g['total_lembur']) ?></td></tr>
           </tbody>
           <tfoot><tr><td>Total pendapatan</td><td class="n"><?= rupiah($pendapatan) ?></td></tr></tfoot>

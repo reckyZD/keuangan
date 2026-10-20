@@ -99,3 +99,42 @@
     });
   });
 })();
+
+/* ---------- Hapus banyak: centang baris di tabel (absensi, lembur) ---------- */
+(function () {
+  var semua = document.getElementById('cek-semua'), form = document.getElementById('form-hapus-banyak');
+  if (!semua || !form) return;
+  var baris = Array.prototype.slice.call(document.querySelectorAll('.cek-baris'));
+  var bar = document.getElementById('bulk-bar'), info = document.getElementById('jml-dipilih');
+  var tombolSemua = document.getElementById('pilih-semua-periode'), flag = document.getElementById('semua-periode');
+  var total = parseInt(form.getAttribute('data-total'), 10) || baris.length;
+
+  function dipilih() { return baris.filter(function (c) { return c.checked; }).length; }
+  function segarkan() {
+    var n = dipilih(), penuh = n > 0 && n === baris.length, mode = flag.value === '1';
+    semua.checked = penuh;
+    semua.indeterminate = n > 0 && !penuh;
+    bar.classList.toggle('d-none', n === 0);
+    info.textContent = mode ? 'Semua ' + total + ' data periode ini dipilih' : n + ' dipilih';
+    tombolSemua.classList.toggle('d-none', !(mode || (penuh && total > baris.length)));
+    tombolSemua.textContent = mode ? 'Batalkan pilih semua' : 'Pilih semua ' + total + ' data periode ini';
+  }
+
+  semua.addEventListener('change', function () {
+    flag.value = '';
+    baris.forEach(function (c) { c.checked = semua.checked; });
+    segarkan();
+  });
+  baris.forEach(function (c) { c.addEventListener('change', function () { flag.value = ''; segarkan(); }); });
+  tombolSemua.addEventListener('click', function () {
+    if (flag.value === '1') { flag.value = ''; baris.forEach(function (c) { c.checked = false; }); }
+    else { flag.value = '1'; }
+    segarkan();
+  });
+  form.addEventListener('submit', function (e) {
+    var mode = flag.value === '1', n = mode ? total : dipilih();
+    var teks = 'Hapus ' + n + ' data' + (mode ? ' (SEMUA data pada periode ini)' : '') + '? ' + (form.getAttribute('data-catatan') || '');
+    if (!n || !confirm(teks)) e.preventDefault();
+  });
+  segarkan();
+})();
