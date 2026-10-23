@@ -57,12 +57,19 @@ yang tadi dipotong, supaya gaji bisa diproses ulang.
   Ukuran 1/3 A4 (210 x 99 mm); cetak semua = 3 slip per lembar A4.
   Di dialog cetak browser pilih: kertas A4, skala 100% (Default), margin None/Tidak ada.
 
+## Rekap absensi + lembur (Excel)
+Di halaman **Absensi** ada kotak "Unduh rekap absensi & lembur (Excel)": pilih rentang tanggal (dan karyawan, atau semua)
+lalu klik Unduh. File `.xlsx` berisi 3 sheet: **Detail Absensi** (tanggal, hari, jam masuk, jam keluar, durasi, jam & upah lembur),
+**Per Karyawan** (hari hadir, total jam kerja, total lembur) dan **Lembur Manual** (lembur yang diinput tanpa absensi).
+Butuh ekstensi PHP zip aktif.
+
 ## Aturan kas
 - Kasbon dicairkan = pengeluaran kas.
 - Potongan kasbon saat gaji diproses TIDAK masuk kas (dibayar langsung owner lewat potong gaji).
 - Gaji pokok dan upah lembur tidak dicatat di kas.
-- Hari kerja Senin-Sabtu (Minggu & tanggal merah = lembur penuh). Upah lembur tetap Rp 7.000/jam;
-  ubah di `app/config.php` (`UPAH_LEMBUR_PER_JAM`, `HARI_LIBUR`).
+- Hari kerja Senin-Sabtu (Minggu & tanggal merah = lembur penuh). Lembur hari kerja = (jam keluar - jam masuk) - 9 jam,
+  eksak tanpa batas minimal/pembulatan; hasil minus (kerja < 9 jam) mengurangi total lembur, upah harian tetap utuh. Upah lembur per jam diatur di **Pengaturan > Upah lembur** (bawaan Rp 7.000);
+  hari libur ada di `app/config.php` (`HARI_LIBUR`).
 - (Opsional) `LEMBUR_DARI_KAS = true` di `app/config.php` jika lembur ingin dicatat sebagai pengeluaran kas.
 
 Data uji: jalankan database/sample_data.sql lalu import file di public/samples/.

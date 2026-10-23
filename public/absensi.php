@@ -1,6 +1,7 @@
 <?php
 require __DIR__ . '/../app/bootstrap.php';
 require_login();
+pastikan_kolom_lembur();
 $title = 'Absensi';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -79,7 +80,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $pdo->beginTransaction();
     $lembur_id = null;
     $total = 0;
-    if ($jam > 0) {
+    if ($jam != 0) {
         [$upah_jam, $total] = hitung_lembur($jam);
         $pdo->prepare('INSERT INTO lembur (karyawan_id,tanggal,jam,tipe,upah_per_jam,total,keterangan) VALUES (?,?,?,?,?,?,?)')
             ->execute([$kid, $tanggal, $jam, $tipe, $upah_jam, $total, "Otomatis dari absensi $masuk-$keluar"]);
@@ -111,8 +112,8 @@ require APP_PATH . '/views/header.php';
   <div class="col-lg-4">
     <div class="card"><div class="card-header">Input Absensi</div><div class="card-body">
       <div class="alert alert-info py-2 small">
-        Hari kerja <b>Senin-Sabtu</b>, jam <b><?= JAM_MASUK ?> - <?= JAM_PULANG ?></b>. Minggu &amp; tanggal merah = lembur penuh.<br>Upah lembur <b>Rp <?= number_format(UPAH_LEMBUR_PER_JAM, 0, ',', '.') ?>/jam</b>.<br>
-        Pulang lewat <?= JAM_PULANG ?> otomatis dihitung lembur (minimal <?= MIN_LEMBUR_MENIT ?> menit, dibulatkan ke bawah per <?= PEMBULATAN_MENIT ?> menit).
+        Hari kerja <b>Senin-Sabtu</b>, jam <b><?= JAM_MASUK ?> - <?= JAM_PULANG ?></b>. Minggu &amp; tanggal merah = lembur penuh.<br>Upah lembur <b>Rp <?= number_format(upah_lembur_jam(), 0, ',', '.') ?>/jam</b> (atur di Pengaturan).<br>
+        Lembur hari kerja = (jam keluar - jam masuk) - 9 jam, eksak tanpa pembulatan. Kalau hasilnya minus (kerja kurang dari 9 jam), jam itu mengurangi total lembur.
       </div>
       <form method="post"><?= csrf_field() ?>
         <div class="mb-2"><label class="form-label">Karyawan</label>
@@ -131,6 +132,22 @@ require APP_PATH . '/views/header.php';
     </div></div>
   </div>
   <div class="col-lg-8">
+    <?php
+    $pb = preg_match('/^\d{4}-\d{2}$/', $periode) ? $periode : date('Y-m');
+    $ex_dari = $pb . '-01'; $ex_sampai = date('Y-m-t', strtotime($ex_dari));
+    ?>
+    <div class="card mb-3"><div class="card-body py-3">
+      <form class="row g-2 align-items-end" method="get" action="absensi_export.php">
+        <div class="col-12 fw-semibold">Unduh rekap absensi &amp; lembur (Excel)</div>
+        <div class="col-sm-auto"><label class="form-label" for="ex-dari">Dari tanggal</label><input type="date" id="ex-dari" name="dari" class="form-control" required value="<?= e($ex_dari) ?>"></div>
+        <div class="col-sm-auto"><label class="form-label" for="ex-sampai">Sampai tanggal</label><input type="date" id="ex-sampai" name="sampai" class="form-control" required value="<?= e($ex_sampai) ?>"></div>
+        <div class="col-sm-auto"><label class="form-label" for="ex-kid">Karyawan</label>
+          <select id="ex-kid" name="karyawan_id" class="form-select"><option value="0">Semua karyawan</option>
+            <?php foreach ($karyawan as $k): ?><option value="<?= (int)$k['id'] ?>"><?= e($k['nama']) ?></option><?php endforeach; ?>
+          </select></div>
+        <div class="col-sm-auto"><button class="btn btn-success"><?= icon('download', 18) ?> Unduh Excel</button></div>
+      </form>
+    </div></div>
     <form class="row g-2 mb-3" method="get">
       <div class="col-auto"><input type="month" name="periode" class="form-control" value="<?= e($periode) ?>"></div>
       <div class="col-auto"><button class="btn btn-outline-primary">Tampilkan</button></div>

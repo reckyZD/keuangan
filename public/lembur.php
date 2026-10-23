@@ -1,6 +1,7 @@
 <?php
 require __DIR__ . '/../app/bootstrap.php';
 require_login();
+pastikan_kolom_lembur();
 $title = 'Lembur';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -71,7 +72,7 @@ require APP_PATH . '/views/header.php';
             <?php foreach ($karyawan as $k): ?><option value="<?= (int)$k['id'] ?>"><?= e($k['nama']) ?></option><?php endforeach; ?>
           </select></div>
         <div class="mb-2"><label class="form-label">Tanggal</label><input type="date" name="tanggal" class="form-control" required value="<?= date('Y-m-d') ?>"></div>
-        <div class="mb-2"><label class="form-label">Jam Lembur <span class="text-muted fw-normal">(Rp <?= number_format(UPAH_LEMBUR_PER_JAM, 0, ',', '.') ?>/jam)</span></label><input type="number" name="jam" step="0.5" min="0.5" max="24" class="form-control" required></div>
+        <div class="mb-2"><label class="form-label">Jam Lembur <span class="text-muted fw-normal">(Rp <?= number_format(upah_lembur_jam(), 0, ',', '.') ?>/jam)</span></label><input type="number" name="jam" step="0.01" min="0.01" max="24" class="form-control" required></div>
         <div class="mb-2"><label class="form-label">Jenis Hari</label>
           <select name="tipe" class="form-select"><option value="hari_kerja">Hari kerja</option><option value="libur">Hari libur (Minggu / tanggal merah)</option></select></div>
         <div class="mb-3"><label class="form-label">Keterangan</label><input name="keterangan" class="form-control"></div>

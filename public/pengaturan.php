@@ -37,6 +37,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $in['gajian_mode']  = $mode;
     $in['gajian_awal']  = $rentang_ok ? $awal : '';
     $in['gajian_akhir'] = $rentang_ok ? $akhir : '';
+    $up_raw = str_replace(',', '.', str_replace('.', '', trim((string)($_POST['upah_lembur_per_jam'] ?? ''))));   // "7.500" -> 7500
+    if (!is_numeric($up_raw) || (float)$up_raw < 0 || (float)$up_raw > 10000000) {
+        flash('Upah lembur per jam harus berupa angka rupiah yang valid.', 'danger');
+        redirect('pengaturan.php');
+    }
+    $in['upah_lembur_per_jam'] = (string)round((float)$up_raw);
     $in['gaji_pokok_cara'] = in_array($_POST['gaji_pokok_cara'] ?? '', ['penuh', 'sekali_sebulan', 'dibagi'], true) ? $_POST['gaji_pokok_cara'] : 'penuh';
     if ($mode !== 'bulanan') {
         // kunci periode 2x sebulan / 2 mingguan lebih panjang dari "YYYY-MM"
@@ -130,6 +136,15 @@ require APP_PATH . '/views/header.php';
           <div class="col-12"><p class="hint mb-0">Khusus tiap 2 minggu. Periode berikutnya otomatis tiap 14 hari dan selalu berakhir di hari yang sama dengan tanggal "sampai" (mis. 19 Sep - 3 Okt, lalu 4 - 17 Okt, 18 - 31 Okt, dst.).</p></div>
         </div>
         <p class="hint mt-3 mb-0">Mengganti pengaturan ini tidak mengubah gaji dan slip yang sudah diproses. Cicilan kasbon dipotong sebesar nilai cicilan pada setiap gajian.</p>
+      </div>
+    </div>
+
+    <div class="card mb-4">
+      <div class="card-header">Upah lembur</div>
+      <div class="card-body">
+        <label class="form-label" for="upah_lembur_per_jam">Upah lembur per jam (Rp)</label>
+        <input class="form-control" id="upah_lembur_per_jam" name="upah_lembur_per_jam" inputmode="numeric" required value="<?= e((string)(int)$co['upah_lembur_per_jam']) ?>">
+        <p class="hint mt-2 mb-0">Dipakai untuk lembur yang dicatat/diimport setelah ini. Lembur yang sudah tercatat tetap memakai tarif saat dicatat. Lembur hari kerja = (jam keluar - jam masuk) - 9 jam.</p>
       </div>
     </div>
 

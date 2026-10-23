@@ -25,7 +25,7 @@ CREATE TABLE lembur (
   id INT AUTO_INCREMENT PRIMARY KEY,
   karyawan_id INT NOT NULL,
   tanggal DATE NOT NULL,
-  jam DECIMAL(4,1) NOT NULL,
+  jam DECIMAL(5,2) NOT NULL,
   tipe ENUM('hari_kerja','libur') NOT NULL DEFAULT 'hari_kerja',
   upah_per_jam DECIMAL(15,2) NOT NULL,
   total DECIMAL(15,2) NOT NULL,
@@ -50,7 +50,7 @@ CREATE TABLE gaji (
   karyawan_id INT NOT NULL,
   periode VARCHAR(12) NOT NULL,         -- YYYY-MM | YYYY-MM-1/2 (2x sebulan) | YYYY-MM-DD (tiap 2 minggu)
   gaji_pokok DECIMAL(15,2) NOT NULL,                     -- = total upah harian (hari_kerja x upah_harian)
-  hari_kerja INT NOT NULL DEFAULT 0,
+  hari_kerja DECIMAL(7,2) NOT NULL DEFAULT 0,            -- hari setara (hadir < 9 jam = jam hadir / 9)
   upah_harian DECIMAL(15,2) NOT NULL DEFAULT 0,
   total_lembur DECIMAL(15,2) NOT NULL DEFAULT 0,
   potongan_kasbon DECIMAL(15,2) NOT NULL DEFAULT 0,
@@ -98,7 +98,7 @@ INSERT INTO pengaturan (kunci, nilai) VALUES
 ('nama', 'PT ADBIRA SELONGSONG PAPER'),
 ('alamat', ''), ('telp', ''), ('email', ''), ('kota', ''), ('logo', ''),
 ('ttd_nama', ''), ('ttd_jabatan', 'Keuangan'),
-('gajian_mode', 'dua_mingguan'), ('gajian_awal', '2026-09-19'), ('gajian_akhir', '2026-10-03'), ('gaji_pokok_cara', 'penuh');
+('gajian_mode', 'dua_mingguan'), ('gajian_awal', '2026-09-19'), ('gajian_akhir', '2026-10-03'), ('gaji_pokok_cara', 'penuh'), ('upah_lembur_per_jam', '7000');
 
 CREATE TABLE gaji_potongan (          -- rincian potongan kasbon per slip (untuk tombol Reset)
   id INT AUTO_INCREMENT PRIMARY KEY,

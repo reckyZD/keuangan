@@ -30,20 +30,38 @@ function flash(?string $msg = null, string $type = 'success') {
 
 function redirect(string $url): void { header("Location: $url"); exit; }
 
+/** Tarif upah lembur per jam (Rp) dari Pengaturan perusahaan. */
+function upah_lembur_jam(): float {
+    return max(0.0, (float)company()['upah_lembur_per_jam']);
+}
+
 /**
- * Upah lembur = jam lembur x tarif tetap per jam (UPAH_LEMBUR_PER_JAM di app/config.php).
- * Tarif sama untuk hari kerja maupun hari libur.
- * Mengembalikan [upah_per_jam, total].
+ * Upah lembur = jam lembur x tarif per jam (Pengaturan > Upah lembur per jam).
+ * Tarif sama untuk hari kerja maupun hari libur. Mengembalikan [upah_per_jam, total].
  */
 function hitung_lembur(float $jam): array {
-    return [(float)UPAH_LEMBUR_PER_JAM, round($jam * UPAH_LEMBUR_PER_JAM)];
+    $t = upah_lembur_jam();
+    return [$t, round($jam * $t)];
+}
+
+/** Kolom lembur.jam semula DECIMAL(4,1); lembur kini dihitung eksak (2 desimal). Aman dipanggil berulang, di luar transaksi. */
+function pastikan_kolom_lembur(): void {
+    global $pdo;
+    static $selesai = false;
+    if ($selesai) return;
+    $selesai = true;
+    try {
+        $sk = $pdo->query("SELECT NUMERIC_SCALE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'lembur' AND COLUMN_NAME = 'jam'")->fetchColumn();
+        if ($sk !== false && (int)$sk < 2) $pdo->exec('ALTER TABLE lembur MODIFY jam DECIMAL(5,2) NOT NULL');
+    } catch (Throwable $t) {}
 }
 
 /**
  * Hitung jam lembur dari jam masuk/keluar.
- * - Hari kerja : lembur = jam keluar - JAM_PULANG (jika >= MIN_LEMBUR_MENIT)
- * - Minggu/tanggal merah : seluruh durasi kerja (dikurangi istirahat) = lembur (Senin-Sabtu hari kerja)
- * Mengembalikan [jam_lembur, tipe].
+ * - Hari kerja : lembur = (jam keluar - jam masuk) - 9 jam. Hasil NEGATIF (kerja kurang dari 9 jam) tetap dikembalikan:
+ *                 itu pengurang total lembur. Tanpa batas minimal & tanpa pembulatan 30 menit.
+ * - Minggu/tanggal merah : seluruh durasi kerja (dikurangi istirahat bila >= 5 jam) = lembur.
+ * Hasil dalam jam desimal 2 angka (mis. 07:33-18:06 = 1,55 jam). Mengembalikan [jam_lembur, tipe].
  */
 function hitung_jam_lembur(string $tanggal, string $masuk, string $keluar, bool $tanggal_merah = false): array {
     $m = strtotime("$tanggal $masuk");
@@ -51,16 +69,15 @@ function hitung_jam_lembur(string $tanggal, string $masuk, string $keluar, bool 
     if ($k <= $m) $k += 86400;                       // pulang melewati tengah malam
     $libur = $tanggal_merah || in_array((int)date('N', strtotime($tanggal)), HARI_LIBUR, true);
 
+    $menit = ($k - $m) / 60;                         // durasi kerja
     if ($libur) {
-        $menit = ($k - $m) / 60;
         if ($menit >= 5 * 60) $menit -= ISTIRAHAT_MENIT;
     } else {
-        $menit = ($k - strtotime("$tanggal " . JAM_PULANG)) / 60;
+        $menit -= JAM_KERJA_MENIT;                   // dikurangi 9 jam
     }
     $tipe = $libur ? 'libur' : 'hari_kerja';
-    if ($menit < MIN_LEMBUR_MENIT) return [0.0, $tipe];
-    $jam = floor($menit / PEMBULATAN_MENIT) * PEMBULATAN_MENIT / 60;
-    return [(float)$jam, $tipe];
+    if ($libur && $menit <= 0) return [0.0, $tipe];
+    return [round($menit / 60, 2), $tipe];     // hari kerja: boleh negatif
 }
 
 /** Samakan format PIN fingerprint (hilangkan nol di depan: 00123 -> 123). */
@@ -244,21 +261,32 @@ function pastikan_kolom_harian(): void {
     };
     try {
         if (!$ada('karyawan', 'upah_harian')) $pdo->exec('ALTER TABLE karyawan ADD COLUMN upah_harian DECIMAL(15,2) NOT NULL DEFAULT 0 AFTER gaji_pokok');
-        if (!$ada('gaji', 'hari_kerja'))      $pdo->exec('ALTER TABLE gaji ADD COLUMN hari_kerja INT NOT NULL DEFAULT 0');
+        if (!$ada('gaji', 'hari_kerja'))      $pdo->exec('ALTER TABLE gaji ADD COLUMN hari_kerja DECIMAL(7,2) NOT NULL DEFAULT 0');
+        // hari kerja bisa pecahan (hadir kurang dari 9 jam): ubah kolom lama yang bertipe INT
+        $tipe = $pdo->query("SELECT DATA_TYPE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'gaji' AND COLUMN_NAME = 'hari_kerja'")->fetchColumn();
+        if ($tipe && strtolower((string)$tipe) === 'int') $pdo->exec('ALTER TABLE gaji MODIFY hari_kerja DECIMAL(7,2) NOT NULL DEFAULT 0');
         if (!$ada('gaji', 'upah_harian'))     $pdo->exec('ALTER TABLE gaji ADD COLUMN upah_harian DECIMAL(15,2) NOT NULL DEFAULT 0');
     } catch (Throwable $t) {}
 }
 
 /**
- * Jumlah hari hadir tiap karyawan pada rentang tanggal => [karyawan_id => jumlah].
- * Hanya hari kerja biasa: hadir di hari libur (Minggu / tanggal merah) dibayar lewat lembur, bukan upah harian.
+ * Jumlah hari hadir tiap karyawan pada rentang tanggal => [karyawan_id => jumlah hari].
+ * Setiap hari hadir = 1 hari penuh upah harian. Kerja kurang dari 9 jam TIDAK memotong upah harian,
+ * melainkan mengurangi jam lembur (lembur hari itu bernilai negatif). Hanya hari kerja biasa: hadir di
+ * hari libur (Minggu / tanggal merah) dibayar lewat lembur, bukan upah harian.
  */
 function hari_hadir_periode(string $awal, string $akhir): array {
     global $pdo;
     $libur = implode(',', array_map('intval', HARI_LIBUR)) ?: '0';
-    $s = $pdo->prepare("SELECT karyawan_id, COUNT(*) FROM absensi WHERE tanggal BETWEEN ? AND ? AND tanggal_merah = 0 AND (WEEKDAY(tanggal) + 1) NOT IN ($libur) GROUP BY karyawan_id");
+    $s = $pdo->prepare("SELECT karyawan_id, COUNT(*) FROM absensi
+        WHERE tanggal BETWEEN ? AND ? AND tanggal_merah = 0 AND (WEEKDAY(tanggal) + 1) NOT IN ($libur) GROUP BY karyawan_id");
     $s->execute([$awal, $akhir]);
-    return $s->fetchAll(PDO::FETCH_KEY_PAIR);
+    return array_map('floatval', $s->fetchAll(PDO::FETCH_KEY_PAIR));
+}
+
+/** Format jumlah hari: 7 => "7", 7.5 => "7,5", 7.33 => "7,33". */
+function hari_fmt($h): string {
+    return rtrim(rtrim(number_format((float)$h, 2, ',', '.'), '0'), ',');
 }
 
 /** Tabel rincian potongan kasbon per slip, dipakai tombol Reset untuk mengembalikan sisa kasbon. Aman dipanggil berulang. */
@@ -329,7 +357,8 @@ function company_defaults(): array {
             'gajian_mode'     => 'dua_mingguan',  // bulanan | semi_bulanan | dua_mingguan
             'gajian_awal'     => '2026-09-19',    // periode pertama (khusus dua_mingguan): dari ...
             'gajian_akhir'    => '2026-10-03',    // ... sampai (hari gajian, Sabtu). Berikutnya tiap 14 hari.
-            'gaji_pokok_cara' => 'penuh'];        // penuh | sekali_sebulan | dibagi
+            'gaji_pokok_cara' => 'penuh',         // penuh | sekali_sebulan | dibagi
+            'upah_lembur_per_jam' => '7000'];     // Rp per jam lembur
 }
 function company(): array {
     static $c = null;

@@ -3,7 +3,7 @@ require __DIR__ . '/../app/bootstrap.php';
 require_login();
 pastikan_kolom_harian();
 $title = 'Gaji & slip';
-$subtitle = 'Upah = jumlah hari hadir x upah harian karyawan, ditambah lembur, dikurangi kasbon. Cetak slip per pegawai (1/3 A4).';
+$subtitle = 'Upah = jumlah hari hadir x upah harian karyawan, ditambah lembur (dikurangi jam kurang dari 9 jam), dikurangi kasbon. Cetak slip per pegawai (1/3 A4).';
 
 $periode = (string)($_REQUEST['periode'] ?? '');
 if (!periode_valid($periode)) $periode = periode_for_date(date('Y-m-d'));
@@ -67,9 +67,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $lem->execute([$k['id'], $p_awal, $p_akhir]);
             $total_lembur = (float)$lem->fetchColumn();
-            $hr = (int)($hari[$k['id']] ?? 0);
-            if ($hr === 0 && $total_lembur <= 0) { $tanpa_hadir[] = $k['nama']; continue; }   // tidak ada kehadiran di periode ini
-            $gp = $hr * $upah;
+            $hr = (float)($hari[$k['id']] ?? 0);       // jumlah hari hadir (kerja < 9 jam mengurangi lembur, bukan upah harian)
+            if ($hr <= 0 && $total_lembur <= 0) { $tanpa_hadir[] = $k['nama']; continue; }   // tidak ada kehadiran di periode ini
+            $gp = round($hr * $upah);                    // hari hadir x upah harian; kekurangan jam sudah masuk sebagai lembur negatif
             $pendapatan = $gp + $total_lembur;
 
             $kas->execute([$k['id']]);
@@ -86,9 +86,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $rinci[] = [$b['id'], $p];
             }
             $bersih = $pendapatan - $potongan;
-            // gaji_pokok = total upah harian (hari hadir x upah per hari); rinciannya disimpan di hari_kerja & upah_harian
+            // gaji_pokok = total upah harian (hari hadir setara x upah per hari); rinciannya disimpan di hari_kerja & upah_harian
             $pdo->prepare('INSERT INTO gaji (karyawan_id,periode,gaji_pokok,hari_kerja,upah_harian,total_lembur,potongan_kasbon,gaji_bersih) VALUES (?,?,?,?,?,?,?,?)')
-                ->execute([$k['id'], $periode, $gp, $hr, $upah, $total_lembur, $potongan, $bersih]);
+                ->execute([$k['id'], $periode, $gp, round($hr, 2), $upah, $total_lembur, $potongan, $bersih]);
             $gid = (int)$pdo->lastInsertId();
             foreach ($rinci as [$kb_id, $kb_jml]) {
                 $pdo->prepare('INSERT INTO gaji_potongan (gaji_id,kasbon_id,jumlah) VALUES (?,?,?)')->execute([$gid, $kb_id, $kb_jml]);
@@ -154,7 +154,7 @@ require APP_PATH . '/views/header.php';
     <tbody>
     <?php foreach ($rows as $r): ?>
       <tr><td><?= e($r['nip']) ?></td><td><?= e($r['nama']) ?></td>
-        <td class="text-end"><?= rupiah($r['gaji_pokok']) ?><?php if ((int)($r['hari_kerja'] ?? 0) > 0): ?><div class="small text-muted"><?= (int)$r['hari_kerja'] ?> hari x <?= rupiah($r['upah_harian']) ?></div><?php endif; ?></td><td class="text-end"><?= rupiah($r['total_lembur']) ?></td>
+        <td class="text-end"><?= rupiah($r['gaji_pokok']) ?><?php if ((float)($r['hari_kerja'] ?? 0) > 0): ?><div class="small text-muted"><?= e(hari_fmt($r['hari_kerja'])) ?> hari x <?= rupiah($r['upah_harian']) ?></div><?php endif; ?></td><td class="text-end"><?= rupiah($r['total_lembur']) ?></td>
         <td class="text-end text-danger">-<?= rupiah($r['potongan_kasbon']) ?></td><td class="text-end fw-semibold"><?= rupiah($r['gaji_bersih']) ?></td>
         <td class="text-end"><a class="btn btn-sm btn-outline-primary" href="slip_gaji.php?id=<?= (int)$r['id'] ?>" target="_blank" rel="noopener">Cetak slip</a></td></tr>
     <?php endforeach; if (!$rows): ?><tr><td colspan="7" class="text-center text-muted py-3">Belum ada gaji diproses untuk periode ini.</td></tr><?php endif; ?>

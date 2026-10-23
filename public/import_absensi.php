@@ -1,6 +1,7 @@
 <?php
 require __DIR__ . '/../app/bootstrap.php';
 require_login();
+pastikan_kolom_lembur();
 $title = 'Import absensi fingerprint';
 $subtitle = 'Unggah laporan fingerprint (.xls / .xlsx / .csv / .dat); lembur dihitung otomatis.';
 
@@ -188,7 +189,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         $hasil = ['baris' => count($rows), 'scan_baru' => 0, 'format_salah' => 0, 'dibuat' => 0, 'jam_lembur' => 0.0,
-                  'sudah_ada' => 0, 'terkunci' => 0, 'tunggal' => [], 'tak_dikenal' => []];
+                  'sudah_ada' => 0, 'terkunci' => 0, 'tunggal' => [], 'default9' => [], 'tak_dikenal' => []];
         $touch = [];
 
         $pdo->beginTransaction();
@@ -218,9 +219,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $q->execute([$pin, "$tgl 00:00:00", "$tgl 23:59:59"]);
                     [$min, $max] = $q->fetch(PDO::FETCH_NUM);
                     if (!$min) continue;
+                    $default9 = false;
                     if (strtotime($max) - strtotime($min) < MIN_SELANG_SCAN_MENIT * 60) {
-                        $hasil['tunggal'][] = $k['nama'] . ' (' . $tgl . ')';
-                        continue;
+                        // Tidak ada scan pulang: jika scan pagi (sebelum DEFAULT_MASUK_MAKS) anggap jam masuk, jam pulang diisi JAM_PULANG (17:00), tanpa lembur.
+                        if (substr($min, 11, 5) < DEFAULT_MASUK_MAKS) {
+                            $default9 = true;
+                        } else {
+                            $hasil['tunggal'][] = $k['nama'] . ' (' . $tgl . ')';
+                            continue;
+                        }
                     }
                     if (gaji_terkunci((int)$k['id'], $tgl)) { $hasil['terkunci']++; continue; }   // gaji periode itu sudah diproses
 
@@ -232,12 +239,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
 
                     $masuk = substr($min, 11, 8);
-                    $keluar = substr($max, 11, 8);
+                    $keluar = $default9 ? JAM_PULANG . ':00' : substr($max, 11, 8);
+                    if ($default9) $hasil['default9'][] = $k['nama'] . ' (' . $tgl . ' masuk ' . substr($masuk, 0, 5) . ')';
                     $merah = in_array($tgl, $merah_list, true);
                     [$jam, $tipe] = hitung_jam_lembur($tgl, $masuk, $keluar, $merah);
+                    if ($default9 && $jam > 0) $jam = 0.0;     // pulang hasil tebakan: tidak boleh menambah lembur (kurang jam tetap mengurangi)
 
                     $lembur_id = null;
-                    if ($jam > 0) {
+                    if ($jam != 0) {
                         [$upah_jam, $total] = hitung_lembur($jam);
                         $pdo->prepare('INSERT INTO lembur (karyawan_id,tanggal,jam,tipe,upah_per_jam,total,keterangan) VALUES (?,?,?,?,?,?,?)')
                             ->execute([$k['id'], $tgl, $jam, $tipe, $upah_jam, $total, 'Otomatis dari fingerprint ' . substr($masuk, 0, 5) . '-' . substr($keluar, 0, 5)]);
@@ -275,8 +284,13 @@ require APP_PATH . '/views/header.php';
       <div class="alert alert-warning py-2">PIN belum terdaftar di data karyawan: <b><?= e(implode(', ', array_keys($hasil['tak_dikenal']))) ?></b>.
         Isi kolom PIN di menu <a href="karyawan.php">Karyawan</a>, lalu import ulang file yang sama (aman, tidak akan dobel).</div>
     <?php endif; ?>
+    <?php if ($hasil['default9']): ?>
+      <div class="alert alert-info py-2">Tidak ada scan pulang, jam pulang diisi otomatis 17:00 (tanpa tambahan lembur; kalau kurang dari 9 jam, mengurangi lembur) untuk <?= count($hasil['default9']) ?> hari:
+        <?= e(implode('; ', array_slice($hasil['default9'], 0, 20))) ?><?= count($hasil['default9']) > 20 ? ' ...' : '' ?>
+        <br><span class="small">Jika scan pulangnya ternyata ada, import ulang filenya dengan centang "timpa".</span></div>
+    <?php endif; ?>
     <?php if ($hasil['tunggal']): ?>
-      <div class="alert alert-secondary py-2">Hanya 1 scan (atau selang scan &lt; <?= MIN_SELANG_SCAN_MENIT ?> menit), tidak dibuatkan absensi:
+      <div class="alert alert-secondary py-2">Hanya 1 scan sore (setelah <?= DEFAULT_MASUK_MAKS ?>, tidak jelas masuk/pulang), tidak dibuatkan absensi:
         <?= e(implode('; ', array_slice($hasil['tunggal'], 0, 20))) ?><?= count($hasil['tunggal']) > 20 ? ' ...' : '' ?></div>
     <?php endif; ?>
     <a href="absensi.php" class="btn btn-primary btn-sm">Lihat Absensi</a>
@@ -372,10 +386,10 @@ require APP_PATH . '/views/header.php';
     <b>Syarat &amp; cara kerja</b>
     <ul class="mb-0">
       <li>Isi kolom <b>PIN / ID Fingerprint</b> tiap karyawan di menu <a href="karyawan.php">Karyawan</a> (sama dengan ID di mesin).</li>
-      <li>Format yang didukung: <b>.xls / .xlsx</b> laporan dari software mesin (yang punya sheet <b>Log</b>; dibaca langsung di browser), <b>.csv</b> (koma, titik koma, atau tab dikenali otomatis), serta <b>.dat</b> dari mesin (ZKTeco, unduhan flashdisk).</li>
-      <li>Untuk file .xls/.xlsx, angka di kolom <b>No</b> pada laporan dianggap <b>PIN</b>, jadi harus sama dengan PIN di menu Karyawan. Sheet lain (Rekap, Laporan Kehadiran) tidak dipakai.</li>
+      <li>Format yang didukung: <b>.xls / .xlsx</b> (format dikenali otomatis, dibaca langsung di browser): laporan <b>Data Log</b> dari software mesin, atau rekap per pegawai (<code>NAMA</code>, <code>PIN Finger</code>, lalu kolom <code>Tanggal / Masuk / pulang</code>), <b>.csv</b> (koma, titik koma, atau tab dikenali otomatis), serta <b>.dat</b> dari mesin (ZKTeco, unduhan flashdisk).</li>
+      <li>Untuk file .xls/.xlsx, PIN diambil dari kolom <b>No</b> laporan mesin (atau dari <b>PIN Finger</b> pada rekap per pegawai), jadi harus sama dengan PIN di menu Karyawan. Jika sheet Log tidak memuat PIN, PIN dicari lewat nama di sheet Laporan Kehadiran.</li>
       <li>Yang dibutuhkan hanya kolom PIN dan tanggal-jam scan. Kolom lain (nama, status masuk/pulang, verifikasi) diabaikan.</li>
-      <li>Scan <b>pertama</b> di satu tanggal = jam masuk, scan <b>terakhir</b> = jam keluar, lalu lembur dihitung dengan aturan di <code>config.php</code>.</li>
+      <li>Scan <b>pertama</b> di satu tanggal = jam masuk, scan <b>terakhir</b> = jam keluar, lalu lembur dihitung: (jam keluar - jam masuk) - 9 jam, tanpa batas minimal; hasil minus (kurang dari 9 jam) mengurangi total lembur. Tarif per jam diatur di Pengaturan. Jika tidak ada scan pulang (hanya 1 scan pagi, sebelum jam 13:00), jam pulang diisi 17:00; kalau masuknya lewat jam 08:00 berarti kurang dari 9 jam dan kekurangannya mengurangi lembur.</li>
       <li>Import file yang sama berulang kali aman: scan duplikat diabaikan dan absensi yang sudah ada tidak dobel.</li>
       <li>Tanggal yang gajinya sudah diproses akan dilewati supaya data gaji tidak berubah.</li>
       <li>Shift yang pulang lewat tengah malam belum didukung di import (dipisah per tanggal kalender).</li>
@@ -404,17 +418,16 @@ require APP_PATH . '/views/header.php';
     if (!window.XLSX || !window.FpXls) { gagal('Pembaca Excel gagal dimuat. Pastikan terhubung ke internet, atau simpan file sebagai .csv dulu.'); return; }
     f.arrayBuffer().then(function (buf) {
       var wb = XLSX.read(buf, { type: 'array' });
-      var nama = wb.SheetNames.filter(function (n) { return /^log$/i.test(n); })[0] ||
-                 wb.SheetNames.filter(function (n) { var a = wb.Sheets[n]['A1']; return a && /data\s*log/i.test(String(a.v)); })[0];
-      if (!nama) throw new Error('Sheet "Log" tidak ditemukan di file ini. Pastikan ini laporan fingerprint yang berisi Data Log.');
-      var aoa = XLSX.utils.sheet_to_json(wb.Sheets[nama], { header: 1, raw: false, defval: '' });
-      var r = FpXls.logKeCsv(aoa);
-      if (!r.jumlah) throw new Error('Tidak ada data scan di sheet Log.');
+      var sheets = wb.SheetNames.map(function (n) {
+        return { nama: n, aoa: XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: false, defval: '' }) };
+      });
+      var r = FpXls.otomatis(sheets);                   // format dikenali otomatis (laporan Log mesin / rekap per pegawai)
+      if (!r.jumlah) throw new Error('Tidak ada data scan yang dikenali di file ini.' + (r.tanpaPin.length ? ' PIN tidak ditemukan untuk: ' + r.tanpaPin.slice(0, 5).join(', ') + '.' : '') + ' Format yang didukung: laporan Data Log dari mesin, atau rekap per pegawai (NAMA, PIN Finger, kolom Tanggal / Masuk / pulang).');
       var dt = new DataTransfer();
       dt.items.add(new File([r.csv], 'log_fingerprint.csv', { type: 'text/csv' }));
       input.files = dt.files;
       document.getElementById('fp-sumber').value = 'xls';
-      info.textContent = r.jumlah + ' scan dari ' + r.karyawan + ' karyawan (' + r.dari + ' s/d ' + r.sampai + ') terbaca. Mengunggah...';
+      info.textContent = 'Format: ' + r.format + '. ' + r.jumlah + ' scan dari ' + r.karyawan + ' karyawan (' + r.dari + ' s/d ' + r.sampai + ') terbaca' + (r.tanpaPin.length ? ' (' + r.tanpaPin.length + ' nama tanpa PIN dilewati: ' + r.tanpaPin.slice(0, 5).join(', ') + ')' : '') + '. Mengunggah...';
       form.submit();
     }).catch(function (e) { gagal(e.message || 'File tidak bisa dibaca.'); });
   });

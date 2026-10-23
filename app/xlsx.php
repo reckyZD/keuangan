@@ -6,7 +6,7 @@
  *              'rows'=>[ [sel, sel, ...], [], ... ] ], ... ]
  * Satu sel: null (dilewati) | teks | angka | [nilai, gaya] ; [null, gaya] = sel kosong bergaya.
  */
-const XS_TITLE = 1, XS_HEAD = 2, XS_TEXT = 3, XS_DATE = 4, XS_NUM = 5, XS_TOTLBL = 6, XS_TOTNUM = 7, XS_BOLD = 8;
+const XS_TITLE = 1, XS_HEAD = 2, XS_TEXT = 3, XS_DATE = 4, XS_NUM = 5, XS_TOTLBL = 6, XS_TOTNUM = 7, XS_BOLD = 8, XS_TIME = 9, XS_DEC = 10, XS_TOTDEC = 11;
 
 function xl_col(int $i): string {            // 0 -> A, 25 -> Z, 26 -> AA
     $s = '';
@@ -70,7 +70,7 @@ function xl_styles_xml(): string {
        . '<top style="thin"><color rgb="FFD3D6CE"/></top><bottom style="thin"><color rgb="FFD3D6CE"/></bottom><diagonal/></border>';
     return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' . "\n"
      . '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
-     . '<numFmts count="1"><numFmt numFmtId="164" formatCode="dd/mm/yyyy"/></numFmts>'
+     . '<numFmts count="2"><numFmt numFmtId="164" formatCode="dd/mm/yyyy"/><numFmt numFmtId="165" formatCode="0.00"/></numFmts>'
      . '<fonts count="4">'
      .   '<font><sz val="11"/><name val="Calibri"/></font>'
      .   '<font><b/><sz val="11"/><name val="Calibri"/></font>'
@@ -85,7 +85,7 @@ function xl_styles_xml(): string {
      . '</fills>'
      . '<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border>' . $b . '</borders>'
      . '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
-     . '<cellXfs count="9">'
+     . '<cellXfs count="12">'
      .   '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'
      .   '<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/>'
      .   '<xf numFmtId="0" fontId="3" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>'
@@ -95,6 +95,9 @@ function xl_styles_xml(): string {
      .   '<xf numFmtId="0" fontId="1" fillId="3" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"/>'
      .   '<xf numFmtId="3" fontId="1" fillId="3" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1"/>'
      .   '<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/>'
+     .   '<xf numFmtId="20" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="top"/></xf>'
+     .   '<xf numFmtId="165" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="top"/></xf>'
+     .   '<xf numFmtId="165" fontId="1" fillId="3" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center"/></xf>'
      . '</cellXfs>'
      . '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>'
      . '</styleSheet>';

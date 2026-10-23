@@ -39,7 +39,7 @@ $co      = company();
 $halaman = array_chunk($rows, 3);
 $kembali = 'gaji.php?periode=' . urlencode($rows[0]['periode']);
 $tgl_cetak = ($co['kota'] !== '' ? $co['kota'] . ', ' : '') . tgl_panjang(date('Y-m-d'));
-$jam_fmt = fn(float $j) => rtrim(rtrim(number_format($j, 1, ',', '.'), '0'), ',');
+$jam_fmt = fn(float $j) => rtrim(rtrim(number_format($j, 2, ',', '.'), '0'), ',');
 ?>
 <!doctype html>
 <html lang="id">
@@ -87,8 +87,8 @@ $jam_fmt = fn(float $j) => rtrim(rtrim(number_format($j, 1, ',', '.'), '0'), ','
         <table>
           <thead><tr><th colspan="2">Pendapatan</th></tr></thead>
           <tbody>
-            <tr><td><?= (int)($g['hari_kerja'] ?? 0) > 0 ? e('Upah harian (' . (int)$g['hari_kerja'] . ' hari x ' . rupiah($g['upah_harian']) . ')') : 'Gaji pokok' ?></td><td class="n"><?= rupiah($g['gaji_pokok']) ?></td></tr>
-            <tr><td>Upah lembur<?= $g['jam_lembur'] > 0 ? ' (' . e($jam_fmt($g['jam_lembur'])) . ' jam)' : '' ?></td><td class="n"><?= rupiah($g['total_lembur']) ?></td></tr>
+            <tr><td><?= (float)($g['hari_kerja'] ?? 0) > 0 ? e('Upah harian (' . hari_fmt($g['hari_kerja']) . ' hari x ' . rupiah($g['upah_harian']) . ')') : 'Gaji pokok' ?></td><td class="n"><?= rupiah($g['gaji_pokok']) ?></td></tr>
+            <tr><td>Upah lembur<?= $g['jam_lembur'] != 0 ? ' (' . e($jam_fmt($g['jam_lembur'])) . ' jam)' : '' ?></td><td class="n"><?= rupiah($g['total_lembur']) ?></td></tr>
           </tbody>
           <tfoot><tr><td>Total pendapatan</td><td class="n"><?= rupiah($pendapatan) ?></td></tr></tfoot>
         </table>
