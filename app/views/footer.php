@@ -1,7 +1,7 @@
   </main>
 </div>
 
-<?php if (!$inline_kas): ?>
+<?php if (!$inline_kas && empty($_hanya_kon)): ?>
 <div class="modal fade" id="kasModal" tabindex="-1" aria-labelledby="kasModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">

@@ -6,7 +6,7 @@ CREATE TABLE users (
   nama VARCHAR(100) NOT NULL,
   username VARCHAR(50) NOT NULL UNIQUE,
   password VARCHAR(255) NOT NULL,
-  role ENUM('admin','staff') NOT NULL DEFAULT 'admin',
+  role ENUM('admin','staff','konsumable') NOT NULL DEFAULT 'admin',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
@@ -106,4 +106,19 @@ CREATE TABLE gaji_potongan (          -- rincian potongan kasbon per slip (untuk
   kasbon_id INT NOT NULL,
   jumlah DECIMAL(15,2) NOT NULL,
   INDEX idx_gaji (gaji_id)
+) ENGINE=InnoDB;
+
+CREATE TABLE konsumable (             -- barang pakai habis (konsumable) perusahaan
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tanggal DATE NOT NULL,
+  jenis ENUM('masuk','keluar') NOT NULL DEFAULT 'masuk',   -- masuk = IN (beli), keluar = OUT (dipakai)
+  nama_barang VARCHAR(150) NOT NULL,
+  qty DECIMAL(12,2) NOT NULL,
+  satuan VARCHAR(20) DEFAULT NULL,
+  harga_satuan DECIMAL(15,2) NOT NULL DEFAULT 0,
+  total DECIMAL(15,2) NOT NULL DEFAULT 0,
+  bagian VARCHAR(100) DEFAULT NULL,                         -- dipakai oleh (untuk OUT)
+  keterangan VARCHAR(255) DEFAULT NULL,
+  dicatat_oleh VARCHAR(100) DEFAULT NULL,
+  INDEX idx_tgl (tanggal)
 ) ENGINE=InnoDB;

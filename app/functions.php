@@ -5,8 +5,63 @@ function rupiah($n): string { return 'Rp ' . number_format((float)$n, 0, ',', '.
 
 function is_logged_in(): bool { return !empty($_SESSION['user']); }
 
+/** Halaman yang boleh dibuka oleh role "konsumable" (pengelola konsumable). Role lain tidak dibatasi. */
+const HALAMAN_KONSUMABLE = ['konsumable.php', 'konsumable_export.php', 'logout.php'];
+
+function user_role(): string { return (string)($_SESSION['user']['role'] ?? ''); }
+
 function require_login(): void {
     if (!is_logged_in()) { header('Location: login.php'); exit; }
+    if (user_role() === 'konsumable' && !in_array(basename($_SERVER['SCRIPT_NAME'] ?? ''), HALAMAN_KONSUMABLE, true)) {
+        header('Location: konsumable.php'); exit;
+    }
+}
+
+/** Khusus role admin (mis. kelola pengguna). */
+function require_admin(): void {
+    require_login();
+    if (user_role() !== 'admin') { flash('Halaman ini khusus admin.', 'danger'); redirect('index.php'); }
+}
+
+/** Tabel konsumable (barang masuk/keluar). Aman dipanggil berulang, di luar transaksi. */
+function pastikan_tabel_konsumable(): void {
+    global $pdo;
+    static $selesai = false;
+    if ($selesai) return;
+    $selesai = true;
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS konsumable (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          tanggal DATE NOT NULL,
+          jenis ENUM('masuk','keluar') NOT NULL DEFAULT 'masuk',
+          nama_barang VARCHAR(150) NOT NULL,
+          qty DECIMAL(12,2) NOT NULL,
+          satuan VARCHAR(20) DEFAULT NULL,
+          harga_satuan DECIMAL(15,2) NOT NULL DEFAULT 0,
+          total DECIMAL(15,2) NOT NULL DEFAULT 0,
+          bagian VARCHAR(100) DEFAULT NULL,
+          keterangan VARCHAR(255) DEFAULT NULL,
+          dicatat_oleh VARCHAR(100) DEFAULT NULL,
+          INDEX idx_tgl (tanggal)
+        ) ENGINE=InnoDB");
+        $ada = static function (string $kolom) use ($pdo): bool {
+            $q = $pdo->prepare("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'konsumable' AND COLUMN_NAME = ?");
+            $q->execute([$kolom]);
+            return (bool)$q->fetchColumn();
+        };
+        // tabel versi sebelumnya (hanya pembelian): semua baris lama otomatis jadi "masuk"
+        if (!$ada('jenis')){  $pdo->exec("ALTER TABLE konsumable ADD COLUMN jenis ENUM('masuk','keluar') NOT NULL DEFAULT 'masuk' AFTER tanggal"); }
+        if (!$ada('bagian')) { $pdo->exec('ALTER TABLE konsumable ADD COLUMN bagian VARCHAR(100) DEFAULT NULL AFTER total'); }
+    } catch (Throwable $t) {}
+}
+
+/** Tambah nilai 'konsumable' ke kolom users.role pada database lama. */
+function pastikan_role_pengguna(): void {
+    global $pdo;
+    static $selesai = false;
+    if ($selesai) return;
+    $selesai = true;
+    try { $pdo->exec("ALTER TABLE users MODIFY role ENUM('admin','staff','konsumable') NOT NULL DEFAULT 'admin'"); } catch (Throwable $t) {}
 }
 
 function csrf_token(): string {
@@ -427,6 +482,7 @@ function icon(string $n, int $s = 20): string {
         'building' => '<path d="M4 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16M16 9h2a2 2 0 0 1 2 2v10M2 21h20"/><path d="M8 7h4M8 11h4M8 15h4"/>',
         'logout'   => '<path d="M9 21H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3M16 17l5-5-5-5M21 12H9"/>',
         'menu'     => '<path d="M4 7h16M4 12h16M4 17h16"/>',
+        'box'      => '<path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/>',
         'plus'     => '<path d="M12 5v14M5 12h14"/>',
         'printer'  => '<path d="M7 9V3h10v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M7 14h10v7H7z"/>',
         'arrow-in' => '<path d="M17 7 7 17M7 8v9h9"/>',
@@ -443,4 +499,21 @@ function favicon_tags(): string {
         return '<link rel="icon" href="' . e($u) . '">' . "\n  " . '<link rel="apple-touch-icon" href="' . e($u) . '">';
     }
     return '<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 32 32\'%3E%3Ccircle cx=\'16\' cy=\'16\' r=\'15\' fill=\'%231F2A44\'/%3E%3Ccircle cx=\'16\' cy=\'16\' r=\'9\' fill=\'none\' stroke=\'%23E2A93B\' stroke-width=\'2.6\'/%3E%3Ccircle cx=\'16\' cy=\'16\' r=\'3.4\' fill=\'%23E2A93B\'/%3E%3C/svg%3E">';
+}
+
+/**
+ * Jam desimal -> teks jam & menit (1 jam = 60 menit), bukan desimal.
+ * 4,75 jam -> "4 jam 45 menit" (pendek: "4j 45m"); 9 -> "9 jam"; 0,5 -> "30 menit".
+ */
+function jam_menit($jam, bool $pendek = false): string {
+    $m = (int)round((float)$jam * 60);
+    $j = intdiv($m, 60);
+    $s = $m % 60;
+    if ($pendek) {
+        if ($m === 0) return '0j';
+        return trim(($j > 0 ? $j . 'j' : '') . ($s > 0 ? ' ' . $s . 'm' : ''));
+    }
+    if ($m === 0) return '0 jam';
+    if ($s === 0) return $j . ' jam';
+    return ($j > 0 ? $j . ' jam ' : '') . $s . ' menit';
 }

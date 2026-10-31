@@ -2,13 +2,20 @@
 $page       = basename($_SERVER['PHP_SELF']);
 $co         = company();
 $inline_kas = in_array($page, ['index.php', 'kas.php'], true);   // halaman yang sudah punya form kas di tempat
-$_nav = [
-    'Harian'     => [['index.php', 'Dashboard', 'home'], ['kas.php', 'Kas', 'wallet']],
-    'Penggajian' => [['karyawan.php', 'Karyawan', 'users'], ['absensi.php', 'Absensi', 'calendar'],
-                     ['import_absensi.php', 'Import finger', 'upload'], ['lembur.php', 'Lembur', 'clock'],
-                     ['kasbon.php', 'Kasbon', 'receipt'], ['gaji.php', 'Gaji & slip', 'banknote']],
-    'Sistem'     => [['pengaturan.php', 'Pengaturan', 'building']],
-];
+$_role      = user_role();
+$_hanya_kon = $_role === 'konsumable';      // pengelola konsumable: hanya menu Konsumable
+if ($_hanya_kon) {
+    $_nav = ['Operasional' => [['konsumable.php', 'Konsumable', 'box']]];
+} else {
+    $_nav = [
+        'Harian'     => [['index.php', 'Dashboard', 'home'], ['kas.php', 'Kas', 'wallet']],
+        'Penggajian' => [['karyawan.php', 'Karyawan', 'users'], ['absensi.php', 'Absensi', 'calendar'],
+                         ['import_absensi.php', 'Import finger', 'upload'], ['lembur.php', 'Lembur', 'clock'],
+                         ['kasbon.php', 'Kasbon', 'receipt'], ['gaji.php', 'Gaji & slip', 'banknote']],
+        'Operasional' => [['konsumable.php', 'Konsumable', 'box']],
+        'Sistem'     => array_merge([['pengaturan.php', 'Pengaturan', 'building']], $_role === 'admin' ? [['pengguna.php', 'Pengguna', 'users']] : []),
+    ];
+}
 $kas_btn = function (string $cls, string $inner) use ($inline_kas): string {
     return $inline_kas
         ? '<a class="' . $cls . '" href="#kas-cepat">' . $inner . '</a>'
@@ -32,7 +39,7 @@ $_flash = flash();
     <span class="brand-name"><?= e($co['nama']) ?></span>
   </a>
 
-  <?= $kas_btn('btn-kas', icon('plus', 18) . '<span>Catat kas</span>') ?>
+  <?php if (!$_hanya_kon): ?><?= $kas_btn('btn-kas', icon('plus', 18) . '<span>Catat kas</span>') ?><?php endif; ?>
 
   <nav class="sb-nav">
     <?php foreach ($_nav as $_grup => $_items): ?>
@@ -59,7 +66,7 @@ $_flash = flash();
   <header class="topbar">
     <button type="button" class="tb-btn" id="sbToggle" aria-controls="sidebar" aria-expanded="false" aria-label="Buka menu"><?= icon('menu', 22) ?></button>
     <span class="tb-title"><?= e($title ?? '') ?></span>
-    <?= $kas_btn('tb-btn tb-kas', icon('plus', 20) . '<span class="visually-hidden">Catat kas</span>') ?>
+    <?php if (!$_hanya_kon): ?><?= $kas_btn('tb-btn tb-kas', icon('plus', 20) . '<span class="visually-hidden">Catat kas</span>') ?><?php endif; ?>
   </header>
 
   <main class="content" id="main">
