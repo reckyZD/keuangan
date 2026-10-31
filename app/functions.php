@@ -476,7 +476,7 @@ function brand_mark(string $class = ''): string {
 function kas_kategori(): array {
     global $pdo;
     $def = [
-        'masuk'  => ['Penjualan', 'Lain-lain'],
+        'masuk'  => ['Penjualan', 'Tarik Tunai', 'Lain-lain'],
         'keluar' => ['Operasional', 'Transport', 'Pembelian', 'Kasbon'],
     ];
     $out = ['masuk' => [], 'keluar' => []];
