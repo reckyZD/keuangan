@@ -6,11 +6,7 @@
  *              'rows'=>[ [sel, sel, ...], [], ... ] ], ... ]
  * Satu sel: null (dilewati) | teks | angka | [nilai, gaya] ; [null, gaya] = sel kosong bergaya.
  */
-<<<<<<< HEAD
-const XS_TITLE = 1, XS_HEAD = 2, XS_TEXT = 3, XS_DATE = 4, XS_NUM = 5, XS_TOTLBL = 6, XS_TOTNUM = 7, XS_BOLD = 8, XS_TIME = 9, XS_DEC = 10, XS_TOTDEC = 11;
-=======
 const XS_TITLE = 1, XS_HEAD = 2, XS_TEXT = 3, XS_DATE = 4, XS_NUM = 5, XS_TOTLBL = 6, XS_TOTNUM = 7, XS_BOLD = 8, XS_TIME = 9, XS_DEC = 10, XS_TOTDEC = 11, XS_QTY = 12, XS_TOTQTY = 13;   // XS_QTY: angka apa adanya (10, 2.5), tanpa ,00
->>>>>>> 01cb343 (update slip gaji)
 
 function xl_col(int $i): string {            // 0 -> A, 25 -> Z, 26 -> AA
     $s = '';
@@ -89,11 +85,7 @@ function xl_styles_xml(): string {
      . '</fills>'
      . '<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border>' . $b . '</borders>'
      . '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
-<<<<<<< HEAD
-     . '<cellXfs count="12">'
-=======
      . '<cellXfs count="14">'
->>>>>>> 01cb343 (update slip gaji)
      .   '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'
      .   '<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/>'
      .   '<xf numFmtId="0" fontId="3" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>'
@@ -106,11 +98,8 @@ function xl_styles_xml(): string {
      .   '<xf numFmtId="20" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="top"/></xf>'
      .   '<xf numFmtId="165" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="top"/></xf>'
      .   '<xf numFmtId="165" fontId="1" fillId="3" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center"/></xf>'
-<<<<<<< HEAD
-=======
      .   '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="top"/></xf>'
      .   '<xf numFmtId="0" fontId="1" fillId="3" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center"/></xf>'
->>>>>>> 01cb343 (update slip gaji)
      . '</cellXfs>'
      . '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>'
      . '</styleSheet>';

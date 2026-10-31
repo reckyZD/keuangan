@@ -76,7 +76,7 @@ foreach ($data as $i => $r) {
     $dur = round(($k - $m) / 3600, 1);
     $N = (int)date('N', strtotime($r['tanggal']));
     $libur = (int)$r['tanggal_merah'] === 1 || in_array($N, HARI_LIBUR, true);
-    $jenis = (int)$r['tanggal_merah'] === 1 ? 'Tanggal merah' : ($libur ? 'Libur' : 'Hari kerja');
+    $jenis = (int)$r['tanggal_merah'] === 1 ? 'Tanggal merah' : ($libur ? 'Libur' : (jenis_setengah_hari($r['jam_masuk'], $r['jam_keluar']) !== '' ? 'Setengah hari' : 'Hari kerja'));
     $lj = (float)$r['jam_lembur']; $lu = (float)$r['upah_lembur'];
 
     $rows[] = [

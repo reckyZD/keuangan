@@ -67,6 +67,8 @@ Butuh ekstensi PHP zip aktif.
 - Kasbon dicairkan = pengeluaran kas.
 - Potongan kasbon saat gaji diproses TIDAK masuk kas (dibayar langsung owner lewat potong gaji).
 - Gaji pokok dan upah lembur tidak dicatat di kas.
+- **Setengah hari** (hari kerja biasa): pulang sebelum 13:00, atau masuk antara 12:00-13:00 lalu pulang sore -> jam kerja 4 jam
+  dan upah harian dihitung 0,5 hari (tanpa lembur negatif). Batas jam diatur di `app/config.php` (`SETENGAH_HARI_*`).
 - Hari kerja Senin-Sabtu (Minggu & tanggal merah = lembur penuh). Lembur hari kerja = (jam keluar - jam masuk) - 9 jam,
   eksak tanpa batas minimal/pembulatan; hasil minus (kerja < 9 jam) mengurangi total lembur, upah harian tetap utuh. Upah lembur per jam diatur di **Pengaturan > Upah lembur** (bawaan Rp 7.000);
   hari libur ada di `app/config.php` (`HARI_LIBUR`).

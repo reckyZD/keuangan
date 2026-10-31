@@ -15,6 +15,12 @@ const JAM_MASUK        = '08:00';
 const JAM_PULANG       = '17:00';  // lembur dihitung setelah jam ini
 const JAM_KERJA_MENIT  = 540;      // 9 jam (08:00-17:00 termasuk istirahat). 9 jam dihitung dari jam masuk (awal maupun telat), sisanya lembur
 const DEFAULT_MASUK_MAKS = '13:00'; // scan tunggal sebelum jam ini = jam masuk (tanpa scan pulang -> jam pulang diisi JAM_PULANG 17:00, tanpa lembur)
+// Setengah hari (hari kerja biasa): upah harian dihitung 0,5 hari dan jam kerja = SETENGAH_HARI_JAM.
+//  - pulang sebelum SETENGAH_HARI_BATAS (mis. pulang 12:00)  -> setengah hari, tanpa lembur
+//  - masuk antara SETENGAH_HARI_MASUK_DARI s/d SETENGAH_HARI_BATAS lalu pulang sore -> setengah hari (lembur hanya jika pulang lewat JAM_PULANG)
+const SETENGAH_HARI_BATAS      = '13:00';
+const SETENGAH_HARI_MASUK_DARI = '12:00';
+const SETENGAH_HARI_JAM        = 4;
 const ISTIRAHAT_MENIT  = 60;       // dipotong jika kerja di hari libur >= 5 jam
 const MIN_SELANG_SCAN_MENIT = 60;  // import fingerprint: selang scan pertama & terakhir minimal ini
 

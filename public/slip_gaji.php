@@ -58,7 +58,7 @@ foreach ($rows as &$r) {
                 $libur = $libur || (int)$a['tanggal_merah'] === 1;
                 $menit = (strtotime($t . ' ' . $a['jam_keluar']) - strtotime($t . ' ' . $a['jam_masuk'])) / 60;
                 if ($menit < 0) $menit += 1440;                      // pulang lewat tengah malam
-                if (!$libur) $kerja = min($menit, JAM_KERJA_MENIT) / 60;
+                if (!$libur) $kerja = jenis_setengah_hari($a['jam_masuk'], $a['jam_keluar']) !== '' ? SETENGAH_HARI_JAM : min($menit, JAM_KERJA_MENIT) / 60;
                 $m = substr($a['jam_masuk'], 0, 5); $p = substr($a['jam_keluar'], 0, 5);
             }
             $kerja_total += $kerja;
@@ -77,11 +77,7 @@ $co      = company();
 $halaman = array_chunk($rows, 2);
 $kembali = 'gaji.php?periode=' . urlencode($rows[0]['periode']);
 $tgl_cetak = ($co['kota'] !== '' ? $co['kota'] . ', ' : '') . tgl_panjang(date('Y-m-d'));
-<<<<<<< HEAD
-$jam_fmt = fn(float $j) => rtrim(rtrim(number_format($j, 2, ',', '.'), '0'), ',');
-=======
 $jam_fmt = fn(float $j) => jam_menit($j);                    // 4,75 jam -> "4 jam 45 menit"
->>>>>>> 01cb343 (update slip gaji)
 ?>
 <!doctype html>
 <html lang="id">
@@ -162,13 +158,8 @@ $jam_fmt = fn(float $j) => jam_menit($j);                    // 4,75 jam -> "4 j
         <table>
           <thead><tr><th colspan="2">Pendapatan</th></tr></thead>
           <tbody>
-<<<<<<< HEAD
-            <tr><td><?= (float)($g['hari_kerja'] ?? 0) > 0 ? e('Upah harian (' . hari_fmt($g['hari_kerja']) . ' hari x ' . rupiah($g['upah_harian']) . ')') : 'Gaji pokok' ?></td><td class="n"><?= rupiah($g['gaji_pokok']) ?></td></tr>
-            <tr><td>Upah lembur<?= $g['jam_lembur'] != 0 ? ' (' . e($jam_fmt($g['jam_lembur'])) . ' jam)' : '' ?></td><td class="n"><?= rupiah($g['total_lembur']) ?></td></tr>
-=======
             <tr><td><?= (float)($g['hari_kerja'] ?? 0) > 0 ? e('Gaji ' . hari_fmt($g['hari_kerja']) . ' hari') : 'Gaji pokok' ?></td><td class="n"><?= rupiah($g['gaji_pokok']) ?></td></tr>
             <tr><td>Lembur<?= $g['jam_lembur'] > 0 ? ' ' . e($jam_fmt($g['jam_lembur'])) : '' ?></td><td class="n"><?= rupiah($g['total_lembur']) ?></td></tr>
->>>>>>> 01cb343 (update slip gaji)
           </tbody>
           <tfoot><tr><td>Total pendapatan</td><td class="n"><?= rupiah($pendapatan) ?></td></tr></tfoot>
         </table>

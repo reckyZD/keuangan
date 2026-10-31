@@ -168,7 +168,9 @@ require APP_PATH . '/views/header.php';
         <?php foreach ($rows as $r): ?>
           <tr><td><input type="checkbox" class="form-check-input cek-baris" name="ids[]" value="<?= (int)$r['id'] ?>" form="form-hapus-banyak" aria-label="Pilih baris"></td>
             <td><?= e(tgl($r['tanggal'])) ?></td><td><?= e($r['nama']) ?></td>
-            <td><?= e(substr($r['jam_masuk'], 0, 5)) ?></td><td><?= e(substr($r['jam_keluar'], 0, 5)) ?></td>
+            <td><?= e(substr($r['jam_masuk'], 0, 5)) ?></td><td><?= e(substr($r['jam_keluar'], 0, 5)) ?>
+              <?php if (!(int)$r['tanggal_merah'] && !in_array((int)date('N', strtotime($r['tanggal'])), HARI_LIBUR, true) && jenis_setengah_hari($r['jam_masuk'], $r['jam_keluar']) !== ''): ?>
+                <span class="badge text-bg-warning ms-1" title="Setengah hari: upah harian dihitung 0,5">&frac12; hari</span><?php endif; ?></td>
             <td><?= $r['jam_lembur'] ? e($r['jam_lembur']) . ' jam' : '-' ?></td>
             <td class="text-end"><?= $r['total'] ? rupiah($r['total']) : '-' ?></td>
             <td class="text-end"><form method="post" onsubmit="return confirm('Hapus absensi ini beserta lemburnya?')"><?= csrf_field() ?>

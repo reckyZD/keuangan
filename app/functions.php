@@ -112,7 +112,26 @@ function pastikan_kolom_lembur(): void {
 }
 
 /**
+ * Jenis setengah hari untuk hari kerja biasa: 'pulang_awal' (pulang sebelum 13:00), 'masuk_siang'
+ * (masuk 12:00-13:00), atau '' (hari penuh). Batas diatur di config.php (SETENGAH_HARI_*).
+ */
+function jenis_setengah_hari(string $masuk, string $keluar): string {
+    $m = substr($masuk, 0, 5); $k = substr($keluar, 0, 5);
+    if ($k > $m && $k < SETENGAH_HARI_BATAS) return 'pulang_awal';
+    if ($m >= SETENGAH_HARI_MASUK_DARI && $m <= SETENGAH_HARI_BATAS) return 'masuk_siang';
+    return '';
+}
+
+/** Kondisi SQL setengah hari pada tabel absensi (sama dengan jenis_setengah_hari). */
+function sql_setengah_hari(): string {
+    return "((jam_keluar > jam_masuk AND jam_keluar < '" . SETENGAH_HARI_BATAS . ":00')"
+         . " OR (jam_masuk >= '" . SETENGAH_HARI_MASUK_DARI . ":00' AND jam_masuk <= '" . SETENGAH_HARI_BATAS . ":00'))";
+}
+
+/**
  * Hitung jam lembur dari jam masuk/keluar.
+ * - Setengah hari (pulang < 13:00 / masuk 12:00-13:00): tidak ada lembur negatif, potongannya lewat hari kerja 0,5.
+ *   Masuk siang yang pulang lewat 17:00 tetap menghitung lembur setelah 17:00.
  * - Hari kerja : lembur = (jam keluar - jam masuk) - 9 jam. Hasil NEGATIF (kerja kurang dari 9 jam) tetap dikembalikan:
  *                 itu pengurang total lembur. Tanpa batas minimal & tanpa pembulatan 30 menit.
  * - Minggu/tanggal merah : seluruh durasi kerja (dikurangi istirahat bila >= 5 jam) = lembur.
@@ -128,6 +147,12 @@ function hitung_jam_lembur(string $tanggal, string $masuk, string $keluar, bool 
     if ($libur) {
         if ($menit >= 5 * 60) $menit -= ISTIRAHAT_MENIT;
     } else {
+        $sh = jenis_setengah_hari($masuk, $keluar);
+        if ($sh === 'pulang_awal') return [0.0, 'hari_kerja'];
+        if ($sh === 'masuk_siang') {
+            $lebih = ($k - strtotime("$tanggal " . JAM_PULANG)) / 60;
+            return [$lebih > 0 ? round($lebih / 60, 2) : 0.0, 'hari_kerja'];
+        }
         $menit -= JAM_KERJA_MENIT;                   // dikurangi 9 jam
     }
     $tipe = $libur ? 'libur' : 'hari_kerja';
@@ -326,14 +351,15 @@ function pastikan_kolom_harian(): void {
 
 /**
  * Jumlah hari hadir tiap karyawan pada rentang tanggal => [karyawan_id => jumlah hari].
- * Setiap hari hadir = 1 hari penuh upah harian. Kerja kurang dari 9 jam TIDAK memotong upah harian,
+ * Setiap hari hadir = 1 hari penuh upah harian, kecuali setengah hari (pulang sebelum 13:00 atau masuk
+ * 12:00-13:00) = 0,5 hari. Kerja kurang dari 9 jam di luar itu TIDAK memotong upah harian,
  * melainkan mengurangi jam lembur (lembur hari itu bernilai negatif). Hanya hari kerja biasa: hadir di
  * hari libur (Minggu / tanggal merah) dibayar lewat lembur, bukan upah harian.
  */
 function hari_hadir_periode(string $awal, string $akhir): array {
     global $pdo;
     $libur = implode(',', array_map('intval', HARI_LIBUR)) ?: '0';
-    $s = $pdo->prepare("SELECT karyawan_id, COUNT(*) FROM absensi
+    $s = $pdo->prepare("SELECT karyawan_id, SUM(CASE WHEN " . sql_setengah_hari() . " THEN 0.5 ELSE 1 END) FROM absensi
         WHERE tanggal BETWEEN ? AND ? AND tanggal_merah = 0 AND (WEEKDAY(tanggal) + 1) NOT IN ($libur) GROUP BY karyawan_id");
     $s->execute([$awal, $akhir]);
     return array_map('floatval', $s->fetchAll(PDO::FETCH_KEY_PAIR));

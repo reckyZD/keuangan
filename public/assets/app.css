@@ -281,7 +281,7 @@ a.tile:hover { border-color: var(--ink-3); background: #FBFBF9; color: var(--tex
   content: ''; position: absolute; inset: 0; pointer-events: none;
   background:
     linear-gradient(180deg, rgba(31,42,68,.80) 0%, rgba(31,42,68,.60) 45%, rgba(31,42,68,.88) 100%),
-    url('../uploads/bg-form.jpeg') center / cover no-repeat;
+    url('../uploads/bg-adbira.jpg') center / cover no-repeat;
 }
 
 .login-art > * { position: relative; z-index: 1; }
