@@ -2,6 +2,7 @@
 require __DIR__ . '/../app/bootstrap.php';
 require_login();
 require_once APP_PATH . '/ttd.php';
+require_once APP_PATH . '/reset_pin.php';
 $title = 'Pengaturan perusahaan';
 $subtitle = 'Data ini tampil sebagai kop pada slip gaji dan di sidebar.';
 
@@ -48,6 +49,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($mode !== 'bulanan') {
         // kunci periode 2x sebulan / 2 mingguan lebih panjang dari "YYYY-MM"
         try { $pdo->exec('ALTER TABLE gaji MODIFY periode VARCHAR(12) NOT NULL'); } catch (Throwable $t) {}
+    }
+
+    // ----- PIN reset gaji (opsional diubah; simpan hanya hash-nya) -----
+    $pin_baru = trim((string)($_POST['pin_baru'] ?? ''));
+    if ($pin_baru !== '' || trim((string)($_POST['pin_ulang'] ?? '')) !== '') {
+        if (!reset_pin_format_valid($pin_baru)) { flash('PIN reset harus 4 sampai 12 angka.', 'danger'); redirect('pengaturan.php'); }
+        if ($pin_baru !== trim((string)($_POST['pin_ulang'] ?? ''))) { flash('Ulangi PIN tidak sama dengan PIN baru.', 'danger'); redirect('pengaturan.php'); }
+        if (reset_pin_terpasang()) {
+            $cek = reset_pin_periksa(trim((string)($_POST['pin_lama'] ?? '')));
+            if ($cek !== true) { flash('PIN lama salah, PIN tidak diubah.', 'danger'); redirect('pengaturan.php'); }
+        }
+        $in['reset_pin_hash'] = password_hash($pin_baru, PASSWORD_DEFAULT);
     }
 
     // ----- Logo -----
@@ -196,6 +209,22 @@ require APP_PATH . '/views/header.php';
   </div>
 
   <div class="col-lg-5">
+    <div class="card mb-4">
+      <div class="card-header">PIN reset gaji</div>
+      <div class="card-body">
+        <p class="hint mb-3">PIN diminta setiap kali menekan <b>Reset periode ini</b> di menu Gaji &amp; slip. <?= reset_pin_terpasang() ? 'PIN sudah dibuat.' : '<b>PIN belum dibuat, reset gaji tidak bisa dipakai sebelum PIN dibuat.</b>' ?></p>
+        <?php if (reset_pin_terpasang()): ?>
+          <div class="mb-2"><label class="form-label" for="pin_lama">PIN lama</label>
+            <input class="form-control" type="password" id="pin_lama" name="pin_lama" inputmode="numeric" maxlength="12" autocomplete="new-password"></div>
+        <?php endif; ?>
+        <div class="mb-2"><label class="form-label" for="pin_baru"><?= reset_pin_terpasang() ? 'PIN baru' : 'Buat PIN' ?> (4-12 angka)</label>
+          <input class="form-control" type="password" id="pin_baru" name="pin_baru" inputmode="numeric" pattern="\d{4,12}" maxlength="12" autocomplete="new-password"></div>
+        <div><label class="form-label" for="pin_ulang">Ulangi PIN</label>
+          <input class="form-control" type="password" id="pin_ulang" name="pin_ulang" inputmode="numeric" pattern="\d{4,12}" maxlength="12" autocomplete="new-password"></div>
+        <p class="hint mt-2 mb-0">Kosongkan semua kolom ini jika tidak ingin membuat atau mengganti PIN.</p>
+      </div>
+    </div>
+
     <div class="card mb-4">
       <div class="card-header">Logo</div>
       <div class="card-body">

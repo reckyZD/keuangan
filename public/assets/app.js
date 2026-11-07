@@ -1,6 +1,73 @@
 (function () {
   'use strict';
 
+  /* ---- Kotak konfirmasi sendiri (pengganti confirm() bawaan browser yang menampilkan nama situs) ----
+     Dipakai otomatis oleh setiap <form onsubmit="return confirm('...')"> atau <form data-konfirmasi="...">.
+     Dari JS: konfirmasi('Teks', {judul, ya, bahaya}).then(function (ok) { ... }) */
+  var kfModal = null, kfEl = null, kfHasil = false, kfSelesai = null;
+  function bangunKonfirmasi() {
+    kfEl = document.createElement('div');
+    kfEl.className = 'modal fade';
+    kfEl.tabIndex = -1;
+    kfEl.setAttribute('aria-hidden', 'true');
+    kfEl.setAttribute('aria-labelledby', 'kfJudul');
+    kfEl.innerHTML =
+      '<div class="modal-dialog modal-dialog-centered"><div class="modal-content">' +
+      '<div class="modal-header"><h2 class="modal-title" id="kfJudul"></h2>' +
+      '<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button></div>' +
+      '<div class="modal-body" id="kfIsi" style="white-space:pre-line"></div>' +
+      '<div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Batal</button>' +
+      '<button type="button" class="btn" id="kfYa"></button></div></div></div>';
+    document.body.appendChild(kfEl);
+    kfModal = new bootstrap.Modal(kfEl);
+    kfEl.querySelector('#kfYa').addEventListener('click', function () { kfHasil = true; kfModal.hide(); });
+    kfEl.addEventListener('shown.bs.modal', function () { kfEl.querySelector('#kfYa').focus(); });
+    kfEl.addEventListener('hidden.bs.modal', function () {
+      var f = kfSelesai; kfSelesai = null;
+      if (f) f(kfHasil);
+    });
+  }
+  window.konfirmasi = function (teks, opsi) {
+    opsi = opsi || {};
+    if (!window.bootstrap || !bootstrap.Modal) return Promise.resolve(window.confirm(teks));   // cadangan jika Bootstrap gagal dimuat
+    if (!kfEl) bangunKonfirmasi();
+    var t = String(teks || '');
+    var hapus = /^\s*hapus/i.test(t), proses = /^\s*proses/i.test(t), reset = /^\s*reset/i.test(t);
+    var judul = opsi.judul || (hapus ? 'Hapus data?' : proses ? 'Proses gaji?' : reset ? 'Reset data?' : 'Konfirmasi');
+    var ya = opsi.ya || (hapus ? 'Ya, hapus' : proses ? 'Ya, proses' : reset ? 'Ya, reset' : 'Ya, lanjutkan');
+    var bahaya = opsi.bahaya !== undefined ? opsi.bahaya : (hapus || reset);
+    if (/^\s*hapus\s*\??\s*$/i.test(t)) t = 'Data ini akan dihapus dan tidak bisa dibatalkan.';
+    kfEl.querySelector('#kfJudul').textContent = judul;
+    kfEl.querySelector('#kfIsi').textContent = t;
+    var tombol = kfEl.querySelector('#kfYa');
+    tombol.textContent = ya;
+    tombol.className = 'btn ' + (bahaya ? 'btn-danger' : 'btn-primary');
+    kfHasil = false;
+    return new Promise(function (selesai) { kfSelesai = selesai; kfModal.show(); });
+  };
+  function kirimForm(form, pengirim) {
+    form.dataset.sudahKonfirmasi = '1';
+    if (form.requestSubmit) { try { form.requestSubmit(pengirim || undefined); return; } catch (err) {} }
+    form.submit();
+  }
+  window.kirimSetelahKonfirmasi = kirimForm;
+
+  // form lama: onsubmit="return confirm('...')" -> ubah jadi data-konfirmasi (pesan yang sama)
+  document.querySelectorAll('form[onsubmit*="confirm("]').forEach(function (f) {
+    var m = /confirm\(\s*(['"])((?:\\[\s\S]|(?!\1)[^\\])*)\1\s*\)/.exec(f.getAttribute('onsubmit') || '');
+    if (!m) return;
+    f.removeAttribute('onsubmit');
+    f.setAttribute('data-konfirmasi', m[2].replace(/\\n/g, '\n').replace(/\\(['"\\])/g, '$1'));
+  });
+  document.addEventListener('submit', function (e) {
+    var f = e.target;
+    if (!f || !f.hasAttribute || !f.hasAttribute('data-konfirmasi')) return;
+    if (f.dataset.sudahKonfirmasi === '1') { delete f.dataset.sudahKonfirmasi; return; }
+    e.preventDefault();
+    var pengirim = e.submitter || null;
+    konfirmasi(f.getAttribute('data-konfirmasi')).then(function (ok) { if (ok) kirimForm(f, pengirim); });
+  }, true);
+
   /* ---- Sidebar (HP) ---- */
   var sb = document.getElementById('sidebar'),
       bd = document.getElementById('sbBackdrop'),
@@ -132,9 +199,13 @@
     segarkan();
   });
   form.addEventListener('submit', function (e) {
+    if (form.dataset.sudahKonfirmasi === '1') { delete form.dataset.sudahKonfirmasi; return; }
+    e.preventDefault();
     var mode = flag.value === '1', n = mode ? total : dipilih();
+    if (!n) return;
     var teks = 'Hapus ' + n + ' data' + (mode ? ' (SEMUA data pada periode ini)' : '') + '? ' + (form.getAttribute('data-catatan') || '');
-    if (!n || !confirm(teks)) e.preventDefault();
+    var pengirim = e.submitter || null;
+    konfirmasi(teks, { judul: 'Hapus ' + n + ' data?' }).then(function (ok) { if (ok) kirimForm(form, pengirim); });
   });
   segarkan();
 })();

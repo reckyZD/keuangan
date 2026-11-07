@@ -2,6 +2,7 @@
 require __DIR__ . '/../app/bootstrap.php';
 require_login();
 pastikan_kolom_harian();
+require_once APP_PATH . '/reset_pin.php';
 $title = 'Gaji & slip';
 
 
@@ -16,6 +17,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     /* ---------- Reset: hapus gaji & slip periode ini, kembalikan sisa kasbon ---------- */
     if (($_POST['aksi'] ?? '') === 'reset') {
+        $cek_pin = reset_pin_periksa(trim((string)($_POST['pin'] ?? '')));
+        if ($cek_pin !== true) { flash($cek_pin, 'danger'); redirect('gaji.php?periode=' . urlencode($periode)); }
         $pdo->beginTransaction();
         try {
             $s = $pdo->prepare('SELECT g.*, k.nama FROM gaji g JOIN karyawan k ON k.id=g.karyawan_id WHERE g.periode=? FOR UPDATE');
@@ -149,10 +152,7 @@ require APP_PATH . '/views/header.php';
             <li><a class="dropdown-item" href="gaji_export.php?mode=tahun&tahun=<?= e(substr($periode, 0, 4)) ?>">Seluruh tahun ini</a></li>
           </ul>
       </div>
-      <form method="post" onsubmit="return confirm('Reset gaji periode <?= e(periode_label($periode)) ?>?\n\nSemua slip periode ini dihapus dan sisa kasbon dikembalikan. Setelah itu Anda bisa memproses ulang.')">
-        <?= csrf_field() ?><input type="hidden" name="periode" value="<?= e($periode) ?>"><input type="hidden" name="aksi" value="reset">
-        <button class="btn btn-outline-danger">Reset periode ini</button>
-      </form>
+      <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#modalReset">Reset periode ini</button>
     </div>
   <?php endif; ?>
 </div>
@@ -171,4 +171,40 @@ require APP_PATH . '/views/header.php';
   </table>
 </div>
 <?= pg_footer($total, $hal, $per) ?></div>
+
+<?php if ($total): ?>
+<div class="modal fade" id="modalReset" tabindex="-1" aria-labelledby="judulReset" aria-hidden="true">
+  <div class="modal-dialog">
+    <form method="post" class="modal-content" autocomplete="off">
+      <?= csrf_field() ?><input type="hidden" name="periode" value="<?= e($periode) ?>"><input type="hidden" name="aksi" value="reset">
+      <div class="modal-header">
+        <h5 class="modal-title" id="judulReset">Reset gaji <?= e(periode_label($periode)) ?>?</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-2">Periode <b><?= e(tgl($p_awal)) ?> s/d <?= e(tgl($p_akhir)) ?></b>:</p>
+        <ul class="mb-3">
+          <li><b><?= (int)$total ?> slip gaji</b> periode ini dihapus permanen.</li>
+          <li>Potongan kasbon pada slip itu dikembalikan ke sisa kasbon.</li>
+          <li>Absensi, lembur, dan data karyawan <b>tidak</b> berubah.</li>
+          <li>Setelah reset, data bisa diperbaiki lalu gaji periode ini diproses ulang. Slip yang sudah dicetak atau diunduh tidak ikut terhapus.</li>
+        </ul>
+        <?php if (reset_pin_terpasang()): ?>
+          <label class="form-label" for="pin_reset">Masukkan PIN reset untuk melanjutkan</label>
+          <input class="form-control" type="password" id="pin_reset" name="pin" inputmode="numeric" pattern="\d{4,12}" maxlength="12" autocomplete="new-password" required>
+        <?php else: ?>
+          <div class="alert alert-warning mb-0">PIN reset belum dibuat. Buat dulu di <a href="pengaturan.php">Pengaturan &gt; PIN reset gaji</a>, lalu kembali ke sini.</div>
+        <?php endif; ?>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Batal</button>
+        <button class="btn btn-danger"<?= reset_pin_terpasang() ? '' : ' disabled' ?>>Ya, reset periode ini</button>
+      </div>
+    </form>
+  </div>
+</div>
+<script>
+document.getElementById('modalReset')?.addEventListener('shown.bs.modal', function () { document.getElementById('pin_reset')?.focus(); });
+</script>
+<?php endif; ?>
 <?php require APP_PATH . '/views/footer.php'; ?>
