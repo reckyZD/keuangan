@@ -3,7 +3,7 @@ require __DIR__ . '/../app/bootstrap.php';
 require_login();
 pastikan_kolom_harian();
 $title = 'Gaji & slip';
-$subtitle = 'Upah = jumlah hari hadir x upah harian karyawan, ditambah lembur (dikurangi jam kurang dari 9 jam), dikurangi kasbon. Cetak slip per pegawai (1/3 A4).';
+
 
 $periode = (string)($_REQUEST['periode'] ?? '');
 if (!periode_valid($periode)) $periode = periode_for_date(date('Y-m-d'));
@@ -140,7 +140,15 @@ require APP_PATH . '/views/header.php';
   </form>
   <?php if ($total): ?>
     <div class="ms-lg-auto d-flex flex-wrap gap-2">
-      <a class="btn btn-outline-primary" href="slip_gaji.php?periode=<?= e($periode) ?>" target="_blank" rel="noopener"><?= icon('printer', 18) ?> Cetak semua slip</a>
+      <a class="btn btn-outline-primary" href="slip_gaji.php?periode=<?= e($periode) ?>" rel="noopener"><?= icon('printer', 18) ?> Cetak semua slip</a>
+      <div class="btn-group">
+        <button type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">Unduh rekap</button>
+          <ul class="dropdown-menu">
+            <li><a class="dropdown-item" href="gaji_export.php?mode=periode&periode=<?= urlencode($periode) ?>">Periode ini</a></li>
+            <li><a class="dropdown-item" href="gaji_export.php?mode=bulan&bulan=<?= e(substr($periode, 0, 7)) ?>">Seluruh bulan ini</a></li>
+            <li><a class="dropdown-item" href="gaji_export.php?mode=tahun&tahun=<?= e(substr($periode, 0, 4)) ?>">Seluruh tahun ini</a></li>
+          </ul>
+      </div>
       <form method="post" onsubmit="return confirm('Reset gaji periode <?= e(periode_label($periode)) ?>?\n\nSemua slip periode ini dihapus dan sisa kasbon dikembalikan. Setelah itu Anda bisa memproses ulang.')">
         <?= csrf_field() ?><input type="hidden" name="periode" value="<?= e($periode) ?>"><input type="hidden" name="aksi" value="reset">
         <button class="btn btn-outline-danger">Reset periode ini</button>
@@ -156,7 +164,7 @@ require APP_PATH . '/views/header.php';
       <tr><td><?= e($r['nip']) ?></td><td><?= e($r['nama']) ?></td>
         <td class="text-end"><?= rupiah($r['gaji_pokok']) ?><?php if ((float)($r['hari_kerja'] ?? 0) > 0): ?><div class="small text-muted"><?= e(hari_fmt($r['hari_kerja'])) ?> hari x <?= rupiah($r['upah_harian']) ?></div><?php endif; ?></td><td class="text-end"><?= rupiah($r['total_lembur']) ?></td>
         <td class="text-end text-danger">-<?= rupiah($r['potongan_kasbon']) ?></td><td class="text-end fw-semibold"><?= rupiah($r['gaji_bersih']) ?></td>
-        <td class="text-end"><a class="btn btn-sm btn-outline-primary" href="slip_gaji.php?id=<?= (int)$r['id'] ?>" target="_blank" rel="noopener">Cetak slip</a></td></tr>
+        <td class="text-end"><a class="btn btn-sm btn-outline-primary" href="slip_gaji.php?id=<?= (int)$r['id'] ?>" rel="noopener">Cetak slip</a></td></tr>
     <?php endforeach; if (!$rows): ?><tr><td colspan="7" class="text-center text-muted py-3">Belum ada gaji diproses untuk periode ini.</td></tr><?php endif; ?>
     </tbody>
     <tfoot><tr class="table-light"><th colspan="5">Total</th><th class="text-end"><?= rupiah($total_bersih) ?></th><th></th></tr></tfoot>

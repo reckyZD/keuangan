@@ -67,6 +67,13 @@ body { font-family: Arial, 'Liberation Sans', Helvetica, sans-serif; color: #111
 .s-sign em { display: block; height: 6mm; }
 .s-sign u { display: block; width: 100%; min-height: 4mm; text-decoration: none; border-top: 0.2mm solid #111; padding-top: .6mm; font-weight: 700; }
 
+/* Tanda tangan & stempel owner: ditumpuk di atas garis nama, tidak mengubah tinggi slip */
+.s-sign .sg-owner { position: relative; }
+.s-sign .sg-img { position: absolute; left: 0; right: 0; bottom: 1.5mm; display: flex; flex-direction: row; align-items: flex-end; justify-content: center; pointer-events: none; }
+.s-sign .sg-img img { display: block; flex: none; width: auto; mix-blend-mode: multiply; }
+.s-sign .sg-stempel { height: 20mm; margin-right: -28mm; opacity: .70; }
+.s-sign .sg-ttd { height: 16mm; }
+
 /* ---------- Cetak ---------- */
 @media print {
   html, body { background: #fff; }

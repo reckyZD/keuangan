@@ -1,6 +1,7 @@
 <?php
 require __DIR__ . '/../app/bootstrap.php';
 require_login();
+require_once APP_PATH . '/ttd.php';
 $title = 'Pengaturan perusahaan';
 $subtitle = 'Data ini tampil sebagai kop pada slip gaji dan di sidebar.';
 
@@ -79,7 +80,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $st = $pdo->prepare('INSERT INTO pengaturan (kunci, nilai) VALUES (?, ?) ON DUPLICATE KEY UPDATE nilai = VALUES(nilai)');
     foreach ($in as $k => $v) $st->execute([$k, $v]);
-    flash('Pengaturan perusahaan disimpan.');
+        $gagal = [];
+    foreach (TTD_JENIS as $jenis => $label) {
+        if (!empty($_POST['hapus_' . $jenis])) ttd_hapus($jenis);
+        $f = $_FILES['file_' . $jenis] ?? null;
+        if ($f && ($f['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
+            $err = ttd_simpan($jenis, $f);
+            if ($err) $gagal[] = $label . ': ' . $err;
+        }
+    }
+    flash('Pengaturan perusahaan disimpan.' . ($gagal ? ' Namun ' . implode(' ', $gagal) : ''), $gagal ? 'warning' : 'success');
     redirect('pengaturan.php');
 }
 
@@ -165,6 +175,21 @@ require APP_PATH . '/views/header.php';
             <input class="form-control" id="ttd_jabatan" name="ttd_jabatan" maxlength="60" value="<?= e($co['ttd_jabatan']) ?>">
           </div>
         </div>
+        <div class="row g-3 mt-1">
+          <?php foreach (TTD_JENIS as $jenis => $label): $url = ttd_url($jenis); ?>
+            <div class="col-md-6">
+              <label class="form-label" for="file_<?= e($jenis) ?>"><?= e($label) ?></label>
+              <?php if ($url): ?>
+                <div class="border rounded p-2 mb-2 text-center" style="background:#f8f9fa"><img src="<?= e($url) ?>" alt="<?= e($label) ?>" style="max-height:90px;max-width:100%"></div>
+              <?php endif; ?>
+              <input class="form-control" type="file" id="file_<?= e($jenis) ?>" name="file_<?= e($jenis) ?>" accept="image/png,image/jpeg,image/webp">
+              <?php if ($url): ?>
+                <div class="form-check mt-2"><input class="form-check-input" type="checkbox" name="hapus_<?= e($jenis) ?>" id="hapus_<?= e($jenis) ?>" value="1"><label class="form-check-label" for="hapus_<?= e($jenis) ?>">Hapus <?= e(strtolower($label)) ?></label></div>
+              <?php endif; ?>
+            </div>
+          <?php endforeach; ?>
+        </div>
+        <p class="hint mt-2 mb-0">PNG berlatar transparan paling rapi, maksimal 2 MB. Dicetak pada slip di atas nama penandatangan.</p>
         <p class="hint mt-3 mb-0">Kota tampil di samping tanggal cetak pada slip. Jika penandatangan dikosongkan, slip menyediakan garis tanda tangan kosong.</p>
       </div>
     </div>

@@ -6,6 +6,9 @@
  */
 require __DIR__ . '/../app/bootstrap.php';
 require_login();
+require_once APP_PATH . '/ttd.php';
+$u_ttd = ttd_url('ttd');
+$u_stp = ttd_url('stempel');
 
 $id      = (int)($_GET['id'] ?? 0);
 $periode = (string)($_GET['periode'] ?? '');
@@ -178,7 +181,14 @@ $jam_fmt = fn(float $j) => jam_menit($j);                    // 4,75 jam -> "4 j
 
       <footer class="s-sign">
         <div><span>Penerima,</span><em></em><u><?= e($g['nama']) ?></u></div>
-        <div><span><?= e($tgl_cetak) ?><br><?= e($co['ttd_jabatan'] ?: 'Keuangan') ?>,</span><em></em><u><?= e($co['ttd_nama'] ?: '') ?></u></div>
+        <div class="sg-owner"><span><?= e($tgl_cetak) ?><br><?= e($co['ttd_jabatan'] ?: 'Keuangan') ?>,</span><em></em><u><?= e($co['ttd_nama'] ?: '') ?></u>
+          <?php if ($u_ttd || $u_stp): ?>
+          <div class="sg-img">
+            <?php if ($u_stp): ?><img class="sg-stempel" src="<?= e($u_stp) ?>" alt=""><?php endif; ?>
+            <?php if ($u_ttd): ?><img class="sg-ttd" src="<?= e($u_ttd) ?>" alt=""><?php endif; ?>
+          </div>
+          <?php endif; ?>
+        </div>
       </footer>
     </section>
   <?php endforeach; ?>

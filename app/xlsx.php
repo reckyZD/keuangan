@@ -7,6 +7,7 @@
  * Satu sel: null (dilewati) | teks | angka | [nilai, gaya] ; [null, gaya] = sel kosong bergaya.
  */
 const XS_TITLE = 1, XS_HEAD = 2, XS_TEXT = 3, XS_DATE = 4, XS_NUM = 5, XS_TOTLBL = 6, XS_TOTNUM = 7, XS_BOLD = 8, XS_TIME = 9, XS_DEC = 10, XS_TOTDEC = 11, XS_QTY = 12, XS_TOTQTY = 13;   // XS_QTY: angka apa adanya (10, 2.5), tanpa ,00
+const XS_RP = 14, XS_TOTRP = 15;   // format uang "Rp 1.000.000" (mengikuti pengaturan Excel), biasa dan baris total
 
 function xl_col(int $i): string {            // 0 -> A, 25 -> Z, 26 -> AA
     $s = '';
@@ -70,7 +71,8 @@ function xl_styles_xml(): string {
        . '<top style="thin"><color rgb="FFD3D6CE"/></top><bottom style="thin"><color rgb="FFD3D6CE"/></bottom><diagonal/></border>';
     return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' . "\n"
      . '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
-     . '<numFmts count="2"><numFmt numFmtId="164" formatCode="dd/mm/yyyy"/><numFmt numFmtId="165" formatCode="0.00"/></numFmts>'
+     . '<numFmts count="3"><numFmt numFmtId="164" formatCode="dd/mm/yyyy"/><numFmt numFmtId="165" formatCode="0.00"/>'
+     .   '<numFmt numFmtId="166" formatCode="&quot;Rp &quot;#,##0;[Red]\-&quot;Rp &quot;#,##0"/></numFmts>'
      . '<fonts count="4">'
      .   '<font><sz val="11"/><name val="Calibri"/></font>'
      .   '<font><b/><sz val="11"/><name val="Calibri"/></font>'
@@ -85,7 +87,7 @@ function xl_styles_xml(): string {
      . '</fills>'
      . '<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border>' . $b . '</borders>'
      . '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
-     . '<cellXfs count="14">'
+     . '<cellXfs count="16">'
      .   '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'
      .   '<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/>'
      .   '<xf numFmtId="0" fontId="3" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>'
@@ -100,6 +102,8 @@ function xl_styles_xml(): string {
      .   '<xf numFmtId="165" fontId="1" fillId="3" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center"/></xf>'
      .   '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="top"/></xf>'
      .   '<xf numFmtId="0" fontId="1" fillId="3" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center"/></xf>'
+     .   '<xf numFmtId="166" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment vertical="top"/></xf>'
+     .   '<xf numFmtId="166" fontId="1" fillId="3" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1"/>'
      . '</cellXfs>'
      . '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>'
      . '</styleSheet>';
